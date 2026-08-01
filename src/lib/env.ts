@@ -15,9 +15,15 @@ const healthEnvSchema = z.object({
   PRAVA_BASE_URL: z.string().url(),
 });
 
+const openaiEnvSchema = z.object({
+  OPENAI_API_KEY: z.string().min(1, "OPENAI_API_KEY is required"),
+  OPENAI_MODEL: z.string().min(1, "OPENAI_MODEL is required"),
+});
+
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
 export type ClientEnv = z.infer<typeof clientEnvSchema>;
 export type HealthEnv = z.infer<typeof healthEnvSchema>;
+export type OpenAIEnv = z.infer<typeof openaiEnvSchema>;
 
 let cachedServerEnv: ServerEnv | null = null;
 
@@ -55,6 +61,27 @@ export function getHealthEnv(): HealthEnv {
   }
 
   return parsed.data;
+}
+
+let cachedOpenAIEnv: OpenAIEnv | null = null;
+
+export function getOpenAIEnv(): OpenAIEnv {
+  if (cachedOpenAIEnv) return cachedOpenAIEnv;
+
+  const parsed = openaiEnvSchema.safeParse({
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+    OPENAI_MODEL: process.env.OPENAI_MODEL,
+  });
+
+  if (!parsed.success) {
+    const missing = parsed.error.issues.map((i) => i.path.join(".")).join(", ");
+    throw new Error(
+      `Missing or invalid OpenAI environment variables: ${missing}. Copy .env.example to .env.local and fill in real values.`
+    );
+  }
+
+  cachedOpenAIEnv = parsed.data;
+  return cachedOpenAIEnv;
 }
 
 export function getClientEnv(): ClientEnv {
