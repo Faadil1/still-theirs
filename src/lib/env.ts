@@ -11,8 +11,13 @@ const clientEnvSchema = z.object({
   NEXT_PUBLIC_PRAVA_PUBLISHABLE_KEY: z.string().min(1, "NEXT_PUBLIC_PRAVA_PUBLISHABLE_KEY is required"),
 });
 
+const healthEnvSchema = z.object({
+  PRAVA_BASE_URL: z.string().url(),
+});
+
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
 export type ClientEnv = z.infer<typeof clientEnvSchema>;
+export type HealthEnv = z.infer<typeof healthEnvSchema>;
 
 let cachedServerEnv: ServerEnv | null = null;
 
@@ -35,6 +40,21 @@ export function getServerEnv(): ServerEnv {
 
   cachedServerEnv = parsed.data;
   return cachedServerEnv;
+}
+
+export function getHealthEnv(): HealthEnv {
+  const parsed = healthEnvSchema.safeParse({
+    PRAVA_BASE_URL: process.env.PRAVA_BASE_URL,
+  });
+
+  if (!parsed.success) {
+    const missing = parsed.error.issues.map((i) => i.path.join(".")).join(", ");
+    throw new Error(
+      `Missing or invalid environment variables for health check: ${missing}. Copy .env.example to .env.local and fill in real sandbox values.`
+    );
+  }
+
+  return parsed.data;
 }
 
 export function getClientEnv(): ClientEnv {

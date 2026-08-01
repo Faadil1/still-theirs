@@ -1,5 +1,5 @@
 import "server-only";
-import { getServerEnv } from "@/lib/env";
+import { getServerEnv, getHealthEnv } from "@/lib/env";
 import {
   healthResponseSchema,
   createSessionResponseSchema,
@@ -48,7 +48,7 @@ async function parseErrorBody(res: Response): Promise<unknown> {
 }
 
 export async function checkPravaHealth(): Promise<HealthResponse> {
-  const { PRAVA_BASE_URL } = getServerEnv();
+  const { PRAVA_BASE_URL } = getHealthEnv();
 
   let res: Response;
   try {
