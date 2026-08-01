@@ -64,6 +64,7 @@ export async function POST(req: NextRequest) {
       latencyBucket: latencyBucket(diagnostics.latencyMs),
       responseIdSuffix: diagnostics.responseIdSuffix,
       schemaValid: diagnostics.schemaValid,
+      failureCategory: diagnostics.failureCategory,
     });
 
     await appendAuditEvent("risk.decision.ready", {

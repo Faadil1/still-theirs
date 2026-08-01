@@ -20,10 +20,27 @@ const openaiEnvSchema = z.object({
   OPENAI_MODEL: z.string().min(1, "OPENAI_MODEL is required"),
 });
 
+export const OPENAI_TIMEOUT_MS_DEFAULT = 30000;
+export const OPENAI_TIMEOUT_MS_MIN = 5000;
+export const OPENAI_TIMEOUT_MS_MAX = 60000;
+
+/**
+ * Parses OPENAI_TIMEOUT_MS defensively: zero, negative, non-numeric,
+ * non-integer, or out-of-range values all safely fall back to the default
+ * rather than throwing — a bad timeout override must never break the route.
+ */
+export function parseOpenAITimeoutMs(raw: string | undefined): number {
+  if (!raw) return OPENAI_TIMEOUT_MS_DEFAULT;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || !Number.isInteger(n)) return OPENAI_TIMEOUT_MS_DEFAULT;
+  if (n < OPENAI_TIMEOUT_MS_MIN || n > OPENAI_TIMEOUT_MS_MAX) return OPENAI_TIMEOUT_MS_DEFAULT;
+  return n;
+}
+
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
 export type ClientEnv = z.infer<typeof clientEnvSchema>;
 export type HealthEnv = z.infer<typeof healthEnvSchema>;
-export type OpenAIEnv = z.infer<typeof openaiEnvSchema>;
+export type OpenAIEnv = z.infer<typeof openaiEnvSchema> & { OPENAI_TIMEOUT_MS: number };
 
 let cachedServerEnv: ServerEnv | null = null;
 
@@ -80,7 +97,7 @@ export function getOpenAIEnv(): OpenAIEnv {
     );
   }
 
-  cachedOpenAIEnv = parsed.data;
+  cachedOpenAIEnv = { ...parsed.data, OPENAI_TIMEOUT_MS: parseOpenAITimeoutMs(process.env.OPENAI_TIMEOUT_MS) };
   return cachedOpenAIEnv;
 }
 

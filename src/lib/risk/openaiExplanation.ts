@@ -1,12 +1,43 @@
 import "server-only";
-import OpenAI from "openai";
+import OpenAI, {
+  APIUserAbortError,
+  APIConnectionTimeoutError,
+  AuthenticationError,
+  RateLimitError,
+  NotFoundError,
+  PermissionDeniedError,
+  APIConnectionError,
+} from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import { getOpenAIEnv } from "@/lib/env";
 import { suffix6 } from "@/lib/prava/redact";
 import { structuredExplanationSchema } from "./schema";
 import type { PurchaseIntent, RiskEvaluation, ExplanationResult, StructuredExplanation } from "./types";
 
-const TIMEOUT_MS = 8000;
+export type OpenAIFailureCategory =
+  | "LOCAL_TIMEOUT"
+  | "OPENAI_API_TIMEOUT"
+  | "AUTHENTICATION_ERROR"
+  | "RATE_LIMIT"
+  | "MODEL_ACCESS_ERROR"
+  | "NETWORK_ERROR"
+  | "STRUCTURED_OUTPUT_INVALID"
+  | "DECISION_MISMATCH"
+  | "UNKNOWN";
+
+/**
+ * Classifies a caught error into a small, sanitized category. Never
+ * inspects or forwards the raw error message/body/stack.
+ */
+function categorizeOpenAIError(err: unknown): OpenAIFailureCategory {
+  if (err instanceof APIUserAbortError) return "LOCAL_TIMEOUT";
+  if (err instanceof APIConnectionTimeoutError) return "OPENAI_API_TIMEOUT";
+  if (err instanceof AuthenticationError) return "AUTHENTICATION_ERROR";
+  if (err instanceof RateLimitError) return "RATE_LIMIT";
+  if (err instanceof NotFoundError || err instanceof PermissionDeniedError) return "MODEL_ACCESS_ERROR";
+  if (err instanceof APIConnectionError) return "NETWORK_ERROR";
+  return "UNKNOWN";
+}
 
 export interface ExplanationDiagnostics {
   schemaValid: boolean;
@@ -14,6 +45,7 @@ export interface ExplanationDiagnostics {
   latencyMs: number;
   modelUsed: string | null;
   httpSuccess: boolean;
+  failureCategory: OpenAIFailureCategory | null;
 }
 
 export interface ExplanationOutcome {
@@ -85,7 +117,11 @@ export function buildDeterministicExplanation(evaluation: RiskEvaluation): Struc
   };
 }
 
-function fallback(evaluation: RiskEvaluation, diagnostics: Omit<ExplanationDiagnostics, "modelUsed">, modelUsed: string | null): ExplanationOutcome {
+function fallback(
+  evaluation: RiskEvaluation,
+  diagnostics: Omit<ExplanationDiagnostics, "modelUsed">,
+  modelUsed: string | null
+): ExplanationOutcome {
   return {
     explanation: { ...buildDeterministicExplanation(evaluation), source: "DETERMINISTIC_FALLBACK" },
     diagnostics: { ...diagnostics, modelUsed },
@@ -97,18 +133,25 @@ export async function generateExplanation(intent: PurchaseIntent, evaluation: Ri
 
   let apiKey: string;
   let model: string;
+  let timeoutMs: number;
   try {
-    ({ OPENAI_API_KEY: apiKey, OPENAI_MODEL: model } = getOpenAIEnv());
+    ({ OPENAI_API_KEY: apiKey, OPENAI_MODEL: model, OPENAI_TIMEOUT_MS: timeoutMs } = getOpenAIEnv());
   } catch {
-    return fallback(evaluation, { schemaValid: false, responseIdSuffix: null, latencyMs: Date.now() - startedAt, httpSuccess: false }, null);
+    return fallback(
+      evaluation,
+      { schemaValid: false, responseIdSuffix: null, latencyMs: Date.now() - startedAt, httpSuccess: false, failureCategory: null },
+      null
+    );
   }
 
   const client = new OpenAI({ apiKey });
   const payload = buildSanitizedPayload(intent, evaluation);
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
   try {
+    // Single authoritative deadline: the SDK's own per-request `timeout`,
+    // with `maxRetries: 0` so one call here means at most one outgoing
+    // HTTP request. No separate AbortController is used, to avoid
+    // stacking competing timeouts.
     const response = await client.responses.parse(
       {
         model,
@@ -128,35 +171,55 @@ export async function generateExplanation(intent: PurchaseIntent, evaluation: Ri
         ],
         text: { format: zodTextFormat(structuredExplanationSchema, "purchase_explanation") },
       },
-      { signal: controller.signal }
+      { timeout: timeoutMs, maxRetries: 0 }
     );
 
-    clearTimeout(timer);
     const latencyMs = Date.now() - startedAt;
     const responseIdSuffix = suffix6(response.id);
 
     const parsed = response.output_parsed;
     if (!parsed) {
-      return fallback(evaluation, { schemaValid: false, responseIdSuffix, latencyMs, httpSuccess: true }, model);
+      return fallback(
+        evaluation,
+        { schemaValid: false, responseIdSuffix, latencyMs, httpSuccess: true, failureCategory: "STRUCTURED_OUTPUT_INVALID" },
+        model
+      );
     }
 
     // The deterministic decision is authoritative. A mismatch discards the
     // OpenAI output entirely rather than trusting it.
     if (parsed.decisionAcknowledged !== evaluation.decision) {
-      return fallback(evaluation, { schemaValid: false, responseIdSuffix, latencyMs, httpSuccess: true }, model);
+      return fallback(
+        evaluation,
+        { schemaValid: false, responseIdSuffix, latencyMs, httpSuccess: true, failureCategory: "DECISION_MISMATCH" },
+        model
+      );
     }
 
     const revalidated = structuredExplanationSchema.safeParse(parsed);
     if (!revalidated.success) {
-      return fallback(evaluation, { schemaValid: false, responseIdSuffix, latencyMs, httpSuccess: true }, model);
+      return fallback(
+        evaluation,
+        { schemaValid: false, responseIdSuffix, latencyMs, httpSuccess: true, failureCategory: "STRUCTURED_OUTPUT_INVALID" },
+        model
+      );
     }
 
     return {
       explanation: { ...revalidated.data, source: "OPENAI" },
-      diagnostics: { schemaValid: true, responseIdSuffix, latencyMs, modelUsed: model, httpSuccess: true },
+      diagnostics: { schemaValid: true, responseIdSuffix, latencyMs, modelUsed: model, httpSuccess: true, failureCategory: null },
     };
-  } catch {
-    clearTimeout(timer);
-    return fallback(evaluation, { schemaValid: false, responseIdSuffix: null, latencyMs: Date.now() - startedAt, httpSuccess: false }, model);
+  } catch (err) {
+    return fallback(
+      evaluation,
+      {
+        schemaValid: false,
+        responseIdSuffix: null,
+        latencyMs: Date.now() - startedAt,
+        httpSuccess: false,
+        failureCategory: categorizeOpenAIError(err),
+      },
+      model
+    );
   }
 }
