@@ -1,22 +1,32 @@
 import { NextResponse } from "next/server";
 import { createPravaSession, PravaApiError } from "@/lib/prava/server";
 import { appendAuditEvent } from "@/lib/audit";
+import { suffix6 } from "@/lib/prava/redact";
 
 export async function POST() {
   const externalOrderRef = `grocery-gate-${Date.now()}`;
 
   try {
-    const result = await createPravaSession({ externalOrderRef });
+    const { data: result, httpStatus } = await createPravaSession({ externalOrderRef });
 
+    // Audit log stores only presence flags and truncated suffixes — never
+    // the full session_id/order_id, and never session_token/iframe_url.
     await appendAuditEvent("prava.session.created", {
-      httpStatus: 201,
-      sessionId: result.session_id,
-      orderId: result.order_id,
+      httpStatus,
+      sessionIdPresent: Boolean(result.session_id),
+      sessionIdSuffix: suffix6(result.session_id),
+      orderIdPresent: Boolean(result.order_id),
+      orderIdSuffix: suffix6(result.order_id),
       expiresAt: result.expires_at,
       sessionTokenPresent: Boolean(result.session_token),
       iframeUrlPresent: Boolean(result.iframe_url),
+      responseSchemaValid: true,
     });
 
+    // sessionToken/iframeUrl ARE returned to the browser here by design —
+    // the documented embedded SDK flow (collectPAN) requires them client-side.
+    // They must never additionally be logged, persisted, or displayed (see
+    // docs/SECURITY_NOTES.md and src/app/page.tsx's transient-state handling).
     return NextResponse.json({
       sessionId: result.session_id,
       sessionToken: result.session_token,

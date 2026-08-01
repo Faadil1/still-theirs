@@ -82,7 +82,12 @@ export interface CreateGrocerySessionInput {
   externalOrderRef: string;
 }
 
-export async function createPravaSession(input: CreateGrocerySessionInput): Promise<CreateSessionResponse> {
+export interface CreateSessionResult {
+  data: CreateSessionResponse;
+  httpStatus: number;
+}
+
+export async function createPravaSession(input: CreateGrocerySessionInput): Promise<CreateSessionResult> {
   const { PRAVA_BASE_URL, PRAVA_SECRET_KEY, PRAVA_TEST_USER_EMAIL, PRAVA_TEST_USER_ID } = getServerEnv();
 
   const body = {
@@ -144,7 +149,7 @@ export async function createPravaSession(input: CreateGrocerySessionInput): Prom
     throw new PravaApiError("Create session response failed schema validation", res.status, responseId, redact(json));
   }
 
-  return parsed.data;
+  return { data: parsed.data, httpStatus: res.status };
 }
 
 export async function getPravaPaymentResult(sessionId: string): Promise<PaymentResultResponse> {

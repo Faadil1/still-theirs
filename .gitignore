@@ -34,6 +34,13 @@ yarn-error.log*
 .env*
 !.env.example
 
+# temporary verification/debug output — must never be committed
+*.log
+dev.log
+raw-response*
+session-response*
+debug-response*
+
 # vercel
 .vercel
 
