@@ -2,196 +2,356 @@
 
 import { useState } from "react";
 import { DEMO_SCENARIOS, type DemoScenarioId } from "@/lib/risk/scenarios";
+import { DemoFlowController, type AnalyzeResultShape, type TrustedContactChoice } from "@/lib/demo/demoFlow";
 
-type Progress = "idle" | "intent" | "rules" | "explanation" | "ready";
-
-interface AnalyzeResult {
-  decision: "APPROVE" | "REQUEST_TRUSTED_CONTACT";
-  score: number;
-  reasonCodes: string[];
-  safeToCreatePravaSession: boolean;
-  credentialCreationAllowed: boolean;
-  explanation: {
-    headline: string;
-    calmExplanation: string;
-    signals: { code: string; plainLanguage: string }[];
-    questionsToConsider: string[];
-    nextStep: string;
-    confidenceBand: string;
-    source: "OPENAI" | "DETERMINISTIC_FALLBACK";
-  };
-  proof: {
-    pravaSessionCreated: boolean;
-    paymentCredentialCreated: boolean;
-  };
-}
-
-const SCENARIO_LABELS: Record<DemoScenarioId, { title: string; description: string }> = {
+const SCENARIO_LABELS: Record<DemoScenarioId, { title: string; description: string; expected: string }> = {
   "routine-groceries": {
     title: "Routine groceries",
     description: "A small, everyday grocery order from a familiar merchant.",
+    expected: "Expected: eligible to proceed",
   },
   "urgent-gift-cards": {
     title: "Urgent gift cards",
     description: "A new online contact urgently asking for several gift cards.",
+    expected: "Expected: pause for a second perspective",
   },
 };
 
-export default function DemoPage() {
-  const [selected, setSelected] = useState<DemoScenarioId | null>(null);
-  const [progress, setProgress] = useState<Progress>("idle");
-  const [result, setResult] = useState<AnalyzeResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+const ANALYSIS_STEPS = [
+  "Purchase intent received",
+  "Deterministic safety rules applied",
+  "OpenAI explanation generated",
+  "Decision ready",
+];
 
-  function reset() {
-    setSelected(null);
-    setProgress("idle");
-    setResult(null);
-    setError(null);
-    setBusy(false);
+function formatAmount(cents: number, currency: string): string {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(cents / 100);
+}
+
+export default function DemoPage() {
+  const [controller] = useState(() => new DemoFlowController());
+  const [state, setState] = useState(() => controller.getState());
+  const [analysisStep, setAnalysisStep] = useState(0);
+
+  function sync() {
+    setState(controller.getState());
   }
 
-  async function handleReview() {
-    if (!selected || busy) return;
-    setBusy(true);
-    setError(null);
-    setResult(null);
-    setProgress("intent");
+  function handleSelect(id: DemoScenarioId) {
+    controller.selectScenario(id);
+    sync();
+  }
+
+  async function handleCheck() {
+    if (!controller.canSubmit()) return;
+    controller.beginAnalysis();
+    sync();
+    setAnalysisStep(0);
+
+    const scenarioId = state.selectedScenario;
+    if (!scenarioId) return;
 
     try {
-      const intent = DEMO_SCENARIOS[selected];
-      // Visual progression only — the actual work happens in one request.
-      await new Promise((r) => setTimeout(r, 200));
-      setProgress("rules");
-      await new Promise((r) => setTimeout(r, 200));
-      setProgress("explanation");
+      for (let i = 0; i < ANALYSIS_STEPS.length - 1; i++) {
+        await new Promise((r) => setTimeout(r, 250));
+        setAnalysisStep(i + 1);
+      }
 
       const res = await fetch("/api/risk/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(intent),
+        body: JSON.stringify(DEMO_SCENARIOS[scenarioId]),
       });
-      const data = await res.json();
+      const data: AnalyzeResultShape & { error?: string } = await res.json();
 
       if (!res.ok) {
-        setError("Something didn't go through. You can try again.");
-        setProgress("idle");
+        controller.failAnalysis("Something didn't go through. You can try again.");
+        sync();
         return;
       }
 
-      setResult(data);
-      setProgress("ready");
+      setAnalysisStep(ANALYSIS_STEPS.length - 1);
+      controller.completeAnalysis(data);
+      sync();
     } catch {
-      setError("Something didn't go through. You can try again.");
-      setProgress("idle");
-    } finally {
-      setBusy(false);
+      controller.failAnalysis("Something didn't go through. You can try again.");
+      sync();
     }
   }
 
+  function handleReset() {
+    controller.reset();
+    setAnalysisStep(0);
+    sync();
+  }
+
+  function handleContinueToPrava() {
+    controller.continueToPravaPending();
+    sync();
+  }
+
+  function handleAskTrustedContact() {
+    controller.askTrustedContact();
+    sync();
+  }
+
+  function handleProceedToTrustedResponse() {
+    controller.proceedToTrustedResponse();
+    sync();
+  }
+
+  function handleTrustedChoice(choice: TrustedContactChoice) {
+    controller.recordTrustedContactChoice(choice);
+    sync();
+  }
+
+  const { view, selectedScenario, result, error, trustedContactChoice } = state;
+  const scenario = selectedScenario ? DEMO_SCENARIOS[selectedScenario] : null;
+
   return (
-    <div className="min-h-screen bg-zinc-50 p-8 font-sans text-sm text-black dark:bg-black dark:text-zinc-50">
+    <div className="min-h-screen bg-[#faf8f5] px-4 py-10 font-serif text-[#1c1a17] dark:bg-[#141210] dark:text-[#f2ede6] sm:px-8">
       <div className="mx-auto max-w-2xl">
-        <h1 className="mb-1 text-xl font-bold">Still Theirs</h1>
-        <p className="mb-6 text-lg text-zinc-700 dark:text-zinc-300">
-          The safest payment credential is sometimes the one that was never created.
-        </p>
+        <header className="mb-10 text-center">
+          <p className="mb-2 text-xs font-sans font-medium uppercase tracking-[0.2em] text-[#8a7f6d] dark:text-[#a89a82]">
+            Still Theirs
+          </p>
+          <h1 className="text-2xl italic leading-snug sm:text-3xl">
+            The safest payment credential is sometimes the one that was never created.
+          </h1>
+        </header>
 
-        <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {(Object.keys(DEMO_SCENARIOS) as DemoScenarioId[]).map((id) => (
-            <button
-              key={id}
-              onClick={() => {
-                setSelected(id);
-                setResult(null);
-                setError(null);
-                setProgress("idle");
-              }}
-              className={`rounded border p-4 text-left ${
-                selected === id ? "border-black dark:border-white" : "border-zinc-300 dark:border-zinc-700"
-              }`}
-            >
-              <div className="font-semibold">{SCENARIO_LABELS[id].title}</div>
-              <div className="text-zinc-600 dark:text-zinc-400">{SCENARIO_LABELS[id].description}</div>
-            </button>
-          ))}
-        </div>
+        {view === "SELECT" && (
+          <section aria-label="Choose a scenario">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {(Object.keys(DEMO_SCENARIOS) as DemoScenarioId[]).map((id) => {
+                const isSelected = selectedScenario === id;
+                return (
+                  <button
+                    key={id}
+                    onClick={() => handleSelect(id)}
+                    aria-pressed={isSelected}
+                    className={`rounded-lg border p-5 text-left font-sans transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8a7f6d] ${
+                      isSelected
+                        ? "border-[#1c1a17] bg-white shadow-sm dark:border-[#f2ede6] dark:bg-[#1c1a17]"
+                        : "border-[#ded6c8] bg-white/60 hover:border-[#b8ac95] dark:border-[#3a352c] dark:bg-[#1c1a17]/40"
+                    }`}
+                  >
+                    <div className="mb-1 font-serif text-lg">{SCENARIO_LABELS[id].title}</div>
+                    <p className="mb-2 text-sm text-[#5c5546] dark:text-[#c9bfa9]">{SCENARIO_LABELS[id].description}</p>
+                    <p className="text-xs uppercase tracking-wide text-[#8a7f6d] dark:text-[#a89a82]">
+                      {SCENARIO_LABELS[id].expected}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
 
-        <div className="mb-6 flex gap-2">
-          <button
-            onClick={handleReview}
-            disabled={!selected || busy}
-            className="rounded bg-black px-4 py-2 text-white disabled:opacity-50 dark:bg-white dark:text-black"
-          >
-            {busy ? "Reviewing..." : "Review this purchase"}
-          </button>
-          <button onClick={reset} className="rounded border border-zinc-400 px-4 py-2">
-            Reset
-          </button>
-        </div>
+            <div className="mt-8 flex justify-center">
+              <button
+                onClick={handleCheck}
+                disabled={!controller.canSubmit()}
+                className="rounded-full bg-[#1c1a17] px-8 py-3 font-sans text-sm font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-40 dark:bg-[#f2ede6] dark:text-[#1c1a17] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#8a7f6d]"
+              >
+                Check this purchase
+              </button>
+            </div>
 
-        {progress !== "idle" && (
-          <div className="mb-6 rounded border border-zinc-300 p-4 dark:border-zinc-700">
-            <ol className="space-y-1">
-              <li>{progress ? "✓" : "○"} Intent received</li>
-              <li>{["rules", "explanation", "ready"].includes(progress) ? "✓" : "○"} Deterministic checks completed</li>
-              <li>{["explanation", "ready"].includes(progress) ? "✓" : "○"} Explanation prepared</li>
-              <li>{progress === "ready" ? "✓" : "○"} Decision ready</li>
-            </ol>
-          </div>
+            {error && <p className="mt-4 text-center font-sans text-sm text-[#8a7f6d]">{error}</p>}
+          </section>
         )}
 
-        {error && <p className="mb-6 rounded border border-zinc-300 p-3 dark:border-zinc-700">{error}</p>}
+        {view === "ANALYZING" && (
+          <section aria-label="Analysis in progress" className="rounded-lg border border-[#ded6c8] bg-white/70 p-6 font-sans dark:border-[#3a352c] dark:bg-[#1c1a17]/40">
+            <ol className="space-y-3">
+              {ANALYSIS_STEPS.map((step, i) => (
+                <li key={step} className={`flex items-center gap-3 text-sm ${i <= analysisStep ? "text-[#1c1a17] dark:text-[#f2ede6]" : "text-[#b8ac95]"}`}>
+                  <span
+                    className={`flex h-5 w-5 items-center justify-center rounded-full border text-xs ${
+                      i <= analysisStep ? "border-[#1c1a17] dark:border-[#f2ede6]" : "border-[#ded6c8]"
+                    }`}
+                  >
+                    {i < analysisStep ? "✓" : ""}
+                  </span>
+                  {step}
+                </li>
+              ))}
+            </ol>
+          </section>
+        )}
 
-        {result && (
-          <div className="space-y-4">
-            <section className="rounded border border-zinc-300 p-4 dark:border-zinc-700">
-              <h2 className="mb-1 font-bold">{result.explanation.headline}</h2>
-              <p>{result.explanation.calmExplanation}</p>
-            </section>
+        {view === "DECISION" && result && (
+          <section aria-label="Decision" className="space-y-5">
+            <div className="rounded-lg border border-[#ded6c8] bg-white/80 p-6 dark:border-[#3a352c] dark:bg-[#1c1a17]/50">
+              <p className="mb-1 font-sans text-xs uppercase tracking-[0.15em] text-[#8a7f6d] dark:text-[#a89a82]">
+                {result.decision === "APPROVE" ? "Eligible for secure payment" : "Payment paused before credential creation"}
+              </p>
+              <h2 className="mb-3 text-xl">{result.explanation.headline}</h2>
+              <p className="font-sans text-[#3a352c] dark:text-[#d8cfbd]">{result.explanation.calmExplanation}</p>
+            </div>
 
-            <section className="rounded border border-zinc-300 p-4 dark:border-zinc-700">
-              <h3 className="mb-2 font-semibold">What we noticed</h3>
-              <ul className="list-inside list-disc space-y-1">
+            <div className="rounded-lg border border-[#ded6c8] bg-white/60 p-6 font-sans dark:border-[#3a352c] dark:bg-[#1c1a17]/30">
+              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[#5c5546] dark:text-[#c9bfa9]">
+                What we noticed
+              </h3>
+              <ul className="space-y-2">
                 {result.explanation.signals.map((s) => (
+                  <li key={s.code} className="text-sm text-[#3a352c] dark:text-[#d8cfbd]">
+                    {s.plainLanguage}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {result.decision === "APPROVE" ? (
+              <div className="rounded-lg border border-[#ded6c8] bg-white/60 p-6 font-sans dark:border-[#3a352c] dark:bg-[#1c1a17]/30">
+                <p className="mb-4 text-sm text-[#5c5546] dark:text-[#c9bfa9]">
+                  No payment credential has been created yet.
+                </p>
+                <button
+                  onClick={handleContinueToPrava}
+                  className="rounded-full bg-[#1c1a17] px-6 py-2.5 text-sm font-medium text-white dark:bg-[#f2ede6] dark:text-[#1c1a17] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#8a7f6d]"
+                >
+                  Continue to secure payment
+                </button>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-[#1c1a17] bg-white p-6 font-sans dark:border-[#f2ede6] dark:bg-[#1c1a17]">
+                <p className="mb-4 text-lg italic">No credential was created.</p>
+                <dl className="mb-4 space-y-1 text-sm text-[#3a352c] dark:text-[#d8cfbd]">
+                  <div className="flex justify-between">
+                    <dt>Prava session created</dt>
+                    <dd className="font-medium">No</dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt>Payment credential created</dt>
+                    <dd className="font-medium">No</dd>
+                  </div>
+                </dl>
+                <button
+                  onClick={handleAskTrustedContact}
+                  className="rounded-full bg-[#1c1a17] px-6 py-2.5 text-sm font-medium text-white dark:bg-[#f2ede6] dark:text-[#1c1a17] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#8a7f6d]"
+                >
+                  Ask someone I trust
+                </button>
+              </div>
+            )}
+
+            <div className="text-center">
+              <button
+                onClick={handleReset}
+                className="font-sans text-sm text-[#8a7f6d] underline-offset-4 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8a7f6d]"
+              >
+                Start over
+              </button>
+            </div>
+          </section>
+        )}
+
+        {view === "PRAVA_PENDING" && (
+          <section aria-label="Prava verification pending" className="space-y-5 rounded-lg border border-[#ded6c8] bg-white/80 p-6 font-sans dark:border-[#3a352c] dark:bg-[#1c1a17]/50">
+            <p className="text-xs uppercase tracking-[0.15em] text-[#8a7f6d] dark:text-[#a89a82]">Prava verification pending</p>
+            <p className="text-[#3a352c] dark:text-[#d8cfbd]">
+              This purchase is eligible to proceed. Creating a payment credential remains a separate, explicit step.
+            </p>
+            <p className="text-[#3a352c] dark:text-[#d8cfbd]">
+              Prava passkey verification is currently being validated. No payment credential has been created in this
+              demo state.
+            </p>
+            <div className="text-center">
+              <button
+                onClick={handleReset}
+                className="rounded-full border border-[#1c1a17] px-6 py-2.5 text-sm font-medium dark:border-[#f2ede6] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#8a7f6d]"
+              >
+                Start over
+              </button>
+            </div>
+          </section>
+        )}
+
+        {view === "TRUSTED_REVIEW" && scenario && (
+          <section aria-label="Review request" className="space-y-5 rounded-lg border border-[#ded6c8] bg-white/80 p-6 font-sans dark:border-[#3a352c] dark:bg-[#1c1a17]/50">
+            <p className="text-xs uppercase tracking-[0.15em] text-[#8a7f6d] dark:text-[#a89a82]">
+              Still Theirs local safety step — review request
+            </p>
+            <dl className="space-y-2 text-sm text-[#3a352c] dark:text-[#d8cfbd]">
+              <div className="flex justify-between">
+                <dt>Merchant category</dt>
+                <dd>{scenario.merchantCategory}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt>Approximate amount</dt>
+                <dd>{formatAmount(scenario.amountCents, scenario.currency)}</dd>
+              </div>
+            </dl>
+            <div>
+              <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-[#5c5546] dark:text-[#c9bfa9]">
+                What stood out
+              </h3>
+              <ul className="space-y-1 text-sm text-[#3a352c] dark:text-[#d8cfbd]">
+                {result?.explanation.signals.map((s) => (
                   <li key={s.code}>{s.plainLanguage}</li>
                 ))}
               </ul>
-            </section>
+            </div>
+            <div className="text-center">
+              <button
+                onClick={handleProceedToTrustedResponse}
+                className="rounded-full bg-[#1c1a17] px-6 py-2.5 text-sm font-medium text-white dark:bg-[#f2ede6] dark:text-[#1c1a17] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#8a7f6d]"
+              >
+                Continue
+              </button>
+            </div>
+          </section>
+        )}
 
-            {result.explanation.questionsToConsider.length > 0 && (
-              <section className="rounded border border-zinc-300 p-4 dark:border-zinc-700">
-                <h3 className="mb-2 font-semibold">Questions worth considering</h3>
-                <ul className="list-inside list-disc space-y-1">
-                  {result.explanation.questionsToConsider.map((q, i) => (
-                    <li key={i}>{q}</li>
-                  ))}
-                </ul>
-              </section>
-            )}
+        {view === "TRUSTED_RESPONSE" && (
+          <section aria-label="Trusted contact response" className="space-y-5 rounded-lg border border-[#ded6c8] bg-white/80 p-6 font-sans dark:border-[#3a352c] dark:bg-[#1c1a17]/50">
+            <p className="text-xs uppercase tracking-[0.15em] text-[#8a7f6d] dark:text-[#a89a82]">
+              Trusted contact — their view only
+            </p>
+            <p className="text-sm text-[#5c5546] dark:text-[#c9bfa9]">
+              The trusted contact can share a view. They cannot purchase, approve payment, create a credential, or
+              change this decision.
+            </p>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <button
+                onClick={() => handleTrustedChoice("CONSISTENT")}
+                className="flex-1 rounded-full border border-[#1c1a17] px-6 py-2.5 text-sm font-medium dark:border-[#f2ede6] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#8a7f6d]"
+              >
+                This seems consistent
+              </button>
+              <button
+                onClick={() => handleTrustedChoice("RECOMMEND_PAUSE")}
+                className="flex-1 rounded-full border border-[#1c1a17] px-6 py-2.5 text-sm font-medium dark:border-[#f2ede6] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#8a7f6d]"
+              >
+                I recommend pausing
+              </button>
+            </div>
+          </section>
+        )}
 
-            <section className="rounded border border-zinc-300 p-4 dark:border-zinc-700">
-              <h3 className="mb-1 font-semibold">Next step</h3>
-              <p>{result.explanation.nextStep}</p>
-            </section>
-
-            <section className="rounded border border-zinc-300 p-4 dark:border-zinc-700">
-              <h3 className="mb-2 font-semibold">Credential proof</h3>
-              <p>Prava session created: {result.proof.pravaSessionCreated ? "Yes" : "No"}</p>
-              <p>Payment credential created: {result.proof.paymentCredentialCreated ? "Yes" : "No"}</p>
-              {result.decision === "APPROVE" && (
-                <p className="mt-2 text-zinc-600 dark:text-zinc-400">
-                  Eligible to create a Prava session later — not created in this demo step.
-                </p>
-              )}
-              {result.decision === "REQUEST_TRUSTED_CONTACT" && (
-                <p className="mt-2 font-medium">
-                  The safest payment credential is sometimes the one that was never created.
-                </p>
-              )}
-            </section>
-          </div>
+        {view === "TRUSTED_RETURN" && (
+          <section aria-label="Return to user" className="space-y-5 rounded-lg border border-[#1c1a17] bg-white p-6 font-sans dark:border-[#f2ede6] dark:bg-[#1c1a17]">
+            <p className="text-xs uppercase tracking-[0.15em] text-[#8a7f6d] dark:text-[#a89a82]">Back to you</p>
+            <p className="text-[#3a352c] dark:text-[#d8cfbd]">
+              Your trusted contact&rsquo;s recommendation:{" "}
+              <span className="font-medium">
+                {trustedContactChoice === "CONSISTENT" ? "This seems consistent." : "They recommend pausing."}
+              </span>
+            </p>
+            <p className="text-[#3a352c] dark:text-[#d8cfbd]">The final choice remains yours. No credential was created.</p>
+            <p className="text-[#3a352c] dark:text-[#d8cfbd]">
+              You can stop here, reconsider, or begin a new purchase later.
+            </p>
+            <div className="text-center">
+              <button
+                onClick={handleReset}
+                className="rounded-full bg-[#1c1a17] px-6 py-2.5 text-sm font-medium text-white dark:bg-[#f2ede6] dark:text-[#1c1a17] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#8a7f6d]"
+              >
+                Start over
+              </button>
+            </div>
+          </section>
         )}
       </div>
     </div>

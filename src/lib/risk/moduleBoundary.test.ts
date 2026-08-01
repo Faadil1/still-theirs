@@ -10,6 +10,7 @@ const RISK_SOURCE_FILES = [
   "src/lib/risk/openaiExplanation.ts",
   "src/app/api/risk/analyze/route.ts",
   "src/app/demo/page.tsx",
+  "src/lib/demo/demoFlow.ts",
 ];
 
 describe("risk module structural boundary (never reaches Prava)", () => {
