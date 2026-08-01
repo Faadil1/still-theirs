@@ -140,3 +140,9 @@ Valid only on sandbox host — never hardcoded into this application.
 2. Task prompt referenced `docs.prava.space/sdk/collect-pan`, which 404s.
    Correct path is `docs.prava.space/sdk/cards/collect-pan`. No content
    discrepancy — only a URL path correction.
+3. Documented Create Session success response is "201 Created" (per the
+   `api-reference/create-session` doc). The live sandbox actually returned
+   **HTTP 200** for a successful, schema-valid session creation on 2026-08-01
+   (see Evidence Ledger E012/E013). Our route handler only checks `res.ok`
+   (any 2xx), so this did not cause a functional failure. Recorded as
+   NEEDS_VERIFICATION — live behavior observed, doc not corrected/reconfirmed.

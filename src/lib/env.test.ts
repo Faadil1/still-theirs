@@ -18,7 +18,7 @@ describe("getServerEnv", () => {
   it("throws a clear error when PRAVA_SECRET_KEY is missing", async () => {
     process.env.PRAVA_BASE_URL = "https://sandbox.api.prava.space";
     process.env.PRAVA_TEST_USER_EMAIL = "test@example.com";
-    process.env.PRAVA_TEST_USER_ID = "elder-demo-001";
+    process.env.PRAVA_TEST_USER_ID = "still-theirs-demo-001";
 
     const { getServerEnv } = await import("./env");
     expect(() => getServerEnv()).toThrow(/PRAVA_SECRET_KEY/);
