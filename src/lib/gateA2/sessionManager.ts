@@ -1,4 +1,10 @@
 import { suffix6 } from "@/lib/prava/redact";
+import {
+  type GateA2Stage,
+  extractPravaErrorCode,
+  categorizeMessage,
+  extractResponseIdSuffix,
+} from "./diagnostics";
 
 export type GateA2Status =
   | "IDLE"
@@ -18,6 +24,14 @@ export interface GateA2PublicState {
   orderIdSuffix: string | null;
   expiresAt: string | null;
   errorCategory: string | null;
+  stage: GateA2Stage;
+  pravaErrorCode: string | null;
+  sanitizedMessageCategory: string | null;
+  passkeyPromptObserved: boolean;
+  onErrorObserved: boolean;
+  onDismissObserved: boolean;
+  promiseRejected: boolean;
+  responseIdSuffix: string | null;
 }
 
 /** Memory-only fields the SDK needs — never rendered, logged, or persisted. */
@@ -83,6 +97,17 @@ export class GateA2Controller {
   private errorCategory: string | null = null;
   private inFlight = false;
 
+  // Diagnostics: tracks the last confirmed milestone reached, and details
+  // recorded at the moment of a failure/dismissal/rejection.
+  private milestoneStage: GateA2Stage = "SDK_INITIALIZATION";
+  private pravaErrorCode: string | null = null;
+  private sanitizedMessageCategory: string | null = null;
+  private passkeyPromptObserved = false;
+  private onErrorObserved = false;
+  private onDismissObserved = false;
+  private promiseRejected = false;
+  private responseIdSuffix: string | null = null;
+
   getPublicState(): GateA2PublicState {
     return {
       status: this.status,
@@ -92,6 +117,14 @@ export class GateA2Controller {
       orderIdSuffix: this.session ? suffix6(this.session.orderId) : null,
       expiresAt: this.session?.expiresAt ?? null,
       errorCategory: this.errorCategory,
+      stage: this.milestoneStage,
+      pravaErrorCode: this.pravaErrorCode,
+      sanitizedMessageCategory: this.sanitizedMessageCategory,
+      passkeyPromptObserved: this.passkeyPromptObserved,
+      onErrorObserved: this.onErrorObserved,
+      onDismissObserved: this.onDismissObserved,
+      promiseRejected: this.promiseRejected,
+      responseIdSuffix: this.responseIdSuffix,
     };
   }
 
@@ -111,7 +144,7 @@ export class GateA2Controller {
 
     this.inFlight = true;
     this.status = "CREATING_SESSION";
-    this.errorCategory = null;
+    this.resetDiagnostics();
     this.session = null;
 
     try {
@@ -141,6 +174,7 @@ export class GateA2Controller {
 
       this.session = { sessionId, orderId, expiresAt, sessionToken, iframeUrl };
       this.status = "READY_FOR_CARD";
+      this.milestoneStage = "IFRAME_LOADING";
     } catch (err) {
       this.status = "SAFE_ERROR";
       this.errorCategory = categorizeError(err);
@@ -150,27 +184,67 @@ export class GateA2Controller {
     }
   }
 
-  /** Called from the SDK's onReady callback: card form is up, user proceeds to enter card + passkey/OTP. */
-  markAwaitingAuthentication(): void {
+  /** Called from the SDK's onReady callback: the iframe loaded and accepts input. */
+  markIframeReady(): void {
+    this.milestoneStage = "CARD_VALIDATION";
     if (this.status === "READY_FOR_CARD") {
       this.status = "AWAITING_USER_AUTHENTICATION";
+    }
+  }
+
+  /** @deprecated use markIframeReady() — kept as an alias for existing callers. */
+  markAwaitingAuthentication(): void {
+    this.markIframeReady();
+  }
+
+  /**
+   * Called from the SDK's onChange callback once card fields report
+   * isComplete. From here on, Prava's own iframe UI performs the security
+   * check and any passkey/WebAuthn step — a boundary the public SDK surface
+   * does not expose distinctly, so both are bucketed as SECURITY_CHECK.
+   */
+  markCardValidationComplete(): void {
+    if (this.milestoneStage === "CARD_VALIDATION") {
+      this.milestoneStage = "SECURITY_CHECK";
     }
   }
 
   /** Called from the SDK's onSuccess callback. Records completion only — no card metadata retained. */
   complete(): void {
     this.status = "COMPLETED";
+    this.milestoneStage = "COMPLETION";
     this.clearSession();
   }
 
-  /** Called from the SDK's onError callback. */
-  fail(rawError: unknown): void {
+  /**
+   * Called from the SDK's onError callback, a rejected collectPAN() Promise,
+   * or a synchronous SDK initialization/mount failure. `source` records
+   * which of those three paths triggered this, for evidence purposes.
+   */
+  fail(rawError: unknown, source: "onError" | "promiseRejection" | "sdkInit" = "onError"): void {
     this.status = "SAFE_ERROR";
     this.errorCategory = categorizeError(rawError);
+    this.pravaErrorCode = extractPravaErrorCode(rawError);
+    this.sanitizedMessageCategory = categorizeMessage(
+      rawError && typeof rawError === "object" && "message" in rawError ? (rawError as { message: unknown }).message : null
+    );
+    this.responseIdSuffix = extractResponseIdSuffix(rawError, suffix6);
+    if (source === "sdkInit") this.milestoneStage = "SDK_INITIALIZATION";
+    this.onErrorObserved = source === "onError";
+    this.promiseRejected = source === "promiseRejection";
     this.clearSession();
   }
 
-  /** Called from the SDK's onDismiss callback, or a user-initiated cancel. */
+  /** Called from the SDK's onDismiss callback (user exited the flow from within the iframe). */
+  dismiss(reason: unknown): void {
+    this.status = "CANCELLED";
+    this.errorCategory = null;
+    this.onDismissObserved = true;
+    this.sanitizedMessageCategory = categorizeMessage(reason);
+    this.clearSession();
+  }
+
+  /** Called from an explicit user click on the page's own Cancel button. */
   cancel(): void {
     this.status = "CANCELLED";
     this.errorCategory = null;
@@ -186,8 +260,20 @@ export class GateA2Controller {
 
   reset(): void {
     this.status = "IDLE";
-    this.errorCategory = null;
+    this.resetDiagnostics();
     this.clearSession();
+  }
+
+  private resetDiagnostics(): void {
+    this.errorCategory = null;
+    this.milestoneStage = "SDK_INITIALIZATION";
+    this.pravaErrorCode = null;
+    this.sanitizedMessageCategory = null;
+    this.passkeyPromptObserved = false;
+    this.onErrorObserved = false;
+    this.onDismissObserved = false;
+    this.promiseRejected = false;
+    this.responseIdSuffix = null;
   }
 
   private clearSession(): void {

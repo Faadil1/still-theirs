@@ -145,4 +145,77 @@ describe("GateA2Controller", () => {
     expect(JSON.stringify(state)).not.toContain("raw-should-not-leak");
     expect(controller.getSessionForSdk()).toBeNull();
   });
+
+  it("onError path preserves the exact SDK error code and marks onErrorObserved (not promiseRejected)", async () => {
+    const controller = new GateA2Controller();
+    await controller.startSession(mockFetchSession());
+    controller.fail({ code: "SDK_INIT_ERROR", message: "raw-should-not-leak" }, "onError");
+    const state = controller.getPublicState();
+    expect(state.pravaErrorCode).toBe("SDK_INIT_ERROR");
+    expect(state.onErrorObserved).toBe(true);
+    expect(state.promiseRejected).toBe(false);
+  });
+
+  it("promiseRejection path is captured distinctly from onError", async () => {
+    const controller = new GateA2Controller();
+    await controller.startSession(mockFetchSession());
+    controller.fail(new Error("raw-should-not-leak"), "promiseRejection");
+    const state = controller.getPublicState();
+    expect(state.promiseRejected).toBe(true);
+    expect(state.onErrorObserved).toBe(false);
+    expect(state.pravaErrorCode).toBe("UNAVAILABLE");
+    expect(JSON.stringify(state)).not.toContain("raw-should-not-leak");
+  });
+
+  it("sdkInit failure source resets stage to SDK_INITIALIZATION", async () => {
+    const controller = new GateA2Controller();
+    await controller.startSession(mockFetchSession());
+    expect(controller.getPublicState().stage).toBe("IFRAME_LOADING");
+    controller.fail({ code: "INVALID_CONFIG" }, "sdkInit");
+    expect(controller.getPublicState().stage).toBe("SDK_INITIALIZATION");
+  });
+
+  it("dismiss() categorizes the reason safely and marks onDismissObserved, never echoing raw reason text", async () => {
+    const controller = new GateA2Controller();
+    await controller.startSession(mockFetchSession());
+    controller.dismiss("User closed the security check modal early");
+    const state = controller.getPublicState();
+    expect(state.status).toBe("CANCELLED");
+    expect(state.onDismissObserved).toBe(true);
+    expect(state.sanitizedMessageCategory).toBe("SECURITY_CHECK_FAILED");
+    expect(JSON.stringify(state)).not.toContain("User closed the security check modal early");
+  });
+
+  it("does not invent a pravaErrorCode when the SDK provides none — uses the UNAVAILABLE sentinel", async () => {
+    const controller = new GateA2Controller();
+    await controller.startSession(mockFetchSession());
+    controller.fail("a plain string with no code", "onError");
+    expect(controller.getPublicState().pravaErrorCode).toBe("UNAVAILABLE");
+  });
+
+  it("stage progresses through milestones and a later generic message never overwrites a more precise stage bucket already set by markCardValidationComplete", async () => {
+    const controller = new GateA2Controller();
+    await controller.startSession(mockFetchSession());
+    controller.markIframeReady();
+    expect(controller.getPublicState().stage).toBe("CARD_VALIDATION");
+    controller.markCardValidationComplete();
+    expect(controller.getPublicState().stage).toBe("SECURITY_CHECK");
+    // A subsequent onError must not regress the stage — it only records
+    // diagnostics at the stage already reached.
+    controller.fail({ code: "SECURITY_CHECK_FAILED" }, "onError");
+    expect(controller.getPublicState().stage).toBe("SECURITY_CHECK");
+  });
+
+  it("raw details (e.g. a PAN-like value) are never present anywhere in getPublicState()", async () => {
+    const controller = new GateA2Controller();
+    await controller.startSession(mockFetchSession());
+    controller.fail(
+      { code: "CARD_INACTIVE", message: "raw-msg", details: { pan: "4111111111111111", cvv: "123" } },
+      "onError"
+    );
+    const serialized = JSON.stringify(controller.getPublicState());
+    expect(serialized).not.toContain("4111111111111111");
+    expect(serialized).not.toContain("123");
+    expect(serialized).not.toContain("raw-msg");
+  });
 });

@@ -89,12 +89,35 @@ export default function GateA2Page() {
       return;
     }
 
-    const sdk = sdkGuard.getOrCreate(() => new PravaSDK({ publishableKey }));
+    let sdk;
+    try {
+      sdk = sdkGuard.getOrCreate(() => new PravaSDK({ publishableKey }));
+    } catch (initError) {
+      controller.fail(initError, "sdkInit");
+      queueMicrotask(sync);
+      void postErrorDiagnostics();
+      return;
+    }
     if (sdkGuard.timesInitialized === 1) {
       void postGateA2Event("gateA2.sdk.initialized", { sdkInitialized: true });
     }
 
     void postGateA2Event("gateA2.collection.opened", { collectionOpened: true });
+
+    function postErrorDiagnostics() {
+      const state = controller.getPublicState();
+      return postGateA2Event("gateA2.flow.error", {
+        errorCategory: state.errorCategory,
+        stage: state.stage,
+        pravaErrorCode: state.pravaErrorCode,
+        sanitizedMessageCategory: state.sanitizedMessageCategory,
+        passkeyPromptObserved: state.passkeyPromptObserved,
+        onErrorObserved: state.onErrorObserved,
+        onDismissObserved: state.onDismissObserved,
+        promiseRejected: state.promiseRejected,
+        responseIdSuffix: state.responseIdSuffix,
+      });
+    }
 
     sdk
       .collectPAN({
@@ -102,9 +125,15 @@ export default function GateA2Page() {
         iframeUrl: sessionForSdk.iframeUrl,
         container: containerRef.current,
         onReady: () => {
-          controller.markAwaitingAuthentication();
+          controller.markIframeReady();
           sync();
           void postGateA2Event("gateA2.authentication.requested", { authenticationRequested: true });
+        },
+        onChange: (state) => {
+          if (state.isComplete) {
+            controller.markCardValidationComplete();
+            sync();
+          }
         },
         onSuccess: () => {
           controller.complete();
@@ -112,20 +141,24 @@ export default function GateA2Page() {
           void postGateA2Event("gateA2.flow.completed", { flowCompleted: true });
         },
         onError: (error) => {
-          controller.fail(error);
+          controller.fail(error, "onError");
           sync();
-          void postGateA2Event("gateA2.flow.error", { errorCategory: controller.getPublicState().errorCategory });
+          void postErrorDiagnostics();
         },
-        onDismiss: () => {
-          controller.cancel();
+        onDismiss: (payload) => {
+          controller.dismiss(payload?.reason);
           sync();
-          void postGateA2Event("gateA2.flow.cancelled", { cancelled: true });
+          const state = controller.getPublicState();
+          void postGateA2Event("gateA2.flow.cancelled", {
+            cancelled: true,
+            sanitizedMessageCategory: state.sanitizedMessageCategory,
+          });
         },
       })
       .catch((error: unknown) => {
-        controller.fail(error);
+        controller.fail(error, "promiseRejection");
         sync();
-        void postGateA2Event("gateA2.flow.error", { errorCategory: controller.getPublicState().errorCategory });
+        void postErrorDiagnostics();
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [publicState.status, publicState.sessionIdSuffix, publicState.orderIdSuffix]);
@@ -170,6 +203,9 @@ export default function GateA2Page() {
 
         <p className="mb-4 rounded border border-zinc-300 p-3 dark:border-zinc-700">
           {STATUS_MESSAGES[publicState.status]}
+          {publicState.status === "SAFE_ERROR" && publicState.pravaErrorCode && (
+            <span className="mt-1 block text-xs text-zinc-500">Code: {publicState.pravaErrorCode}</span>
+          )}
         </p>
 
         <div id="prava-card-form" ref={containerRef} className="min-h-[1px]" />

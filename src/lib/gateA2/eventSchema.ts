@@ -25,6 +25,25 @@ export const gateA2EventSchema = z.object({
   flowCompleted: z.boolean().optional(),
   cancelled: z.boolean().optional(),
   errorCategory: z.string().max(64).nullable().optional(),
+  stage: z
+    .enum([
+      "SDK_INITIALIZATION",
+      "IFRAME_LOADING",
+      "CARD_VALIDATION",
+      "SECURITY_CHECK",
+      "WEBAUTHN_REQUESTED",
+      "WEBAUTHN_REJECTED",
+      "COMPLETION",
+      "UNKNOWN",
+    ])
+    .optional(),
+  pravaErrorCode: z.string().max(64).nullable().optional(),
+  sanitizedMessageCategory: z.string().max(64).nullable().optional(),
+  passkeyPromptObserved: z.boolean().optional(),
+  onErrorObserved: z.boolean().optional(),
+  onDismissObserved: z.boolean().optional(),
+  promiseRejected: z.boolean().optional(),
+  responseIdSuffix: z.string().max(9).nullable().optional(),
 });
 
 export type GateA2Event = z.infer<typeof gateA2EventSchema>;

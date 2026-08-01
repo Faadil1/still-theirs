@@ -60,6 +60,34 @@ describe("POST /api/prava/gate-a2-event", () => {
     }
   });
 
+  it("records diagnostic fields (stage, pravaErrorCode, etc.) while stripping any smuggled raw error object", async () => {
+    const res = await POST(
+      makeRequest({
+        event: "gateA2.flow.error",
+        stage: "SECURITY_CHECK",
+        pravaErrorCode: "SECURITY_CHECK_FAILED",
+        sanitizedMessageCategory: "SECURITY_CHECK_FAILED",
+        onErrorObserved: true,
+        promiseRejected: false,
+        onDismissObserved: false,
+        passkeyPromptObserved: false,
+        responseIdSuffix: "...ABC123",
+        rawSdkErrorObject: { message: "should-never-appear", details: { pan: "4111111111111111" } },
+      })
+    );
+    expect(res.status).toBe(200);
+
+    const raw = await fs.readFile(AUDIT_LOG_PATH, "utf-8");
+    expect(raw).not.toContain("should-never-appear");
+    expect(raw).not.toContain("4111111111111111");
+    expect(raw).toContain("SECURITY_CHECK");
+    expect(raw).toContain("SECURITY_CHECK_FAILED");
+
+    const parsed = JSON.parse(raw);
+    const last = parsed[parsed.length - 1];
+    expect(last.detail).not.toHaveProperty("rawSdkErrorObject");
+  });
+
   it("rejects an event name outside the whitelist", async () => {
     const res = await POST(makeRequest({ event: "gateA2.totally.made.up" }));
     expect(res.status).toBe(400);

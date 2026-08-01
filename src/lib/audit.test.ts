@@ -52,4 +52,19 @@ describe("appendAuditEvent", () => {
     const last = parsed[parsed.length - 1];
     expect(last.detail.dynamic_cvv).toBe("[REDACTED]");
   });
+
+  it("serializes concurrent writes so two near-simultaneous events are never lost (regression for the missing gateA2.sdk.initialized event)", async () => {
+    await fs.writeFile(AUDIT_LOG_PATH, "[]", "utf-8");
+
+    await Promise.all([
+      appendAuditEvent("event.one", { marker: "one" }),
+      appendAuditEvent("event.two", { marker: "two" }),
+      appendAuditEvent("event.three", { marker: "three" }),
+    ]);
+
+    const raw = await fs.readFile(AUDIT_LOG_PATH, "utf-8");
+    const parsed = JSON.parse(raw);
+    const markers = parsed.map((e: { detail: { marker: string } }) => e.detail.marker);
+    expect(markers.sort()).toEqual(["one", "three", "two"]);
+  });
 });
