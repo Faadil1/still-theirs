@@ -1,20 +1,26 @@
 import type { PurchaseIntent } from "./types";
 
-/** SCENARIO 1 — ROUTINE GROCERIES. Expected: APPROVE. */
+/**
+ * SCENARIO 1 — ROUTINE DIGITAL PURCHASE (Gumroad). Expected: APPROVE.
+ * scenarioId is intentionally left as "routine-groceries" — it is only an
+ * internal key (used by DEMO_SCENARIOS, DemoFlowController, and tests) and
+ * renaming it would touch far more surface area than the underlying
+ * purchase facts warrant.
+ */
 export const ROUTINE_GROCERIES_INTENT: PurchaseIntent = {
   scenarioId: "routine-groceries",
-  merchantLabel: "Everyday Grocery Demo",
-  merchantCategory: "Groceries",
-  amountCents: 4500,
-  currency: "USD",
-  itemCategory: "groceries",
+  merchantLabel: "Gumroad",
+  merchantCategory: "Digital Goods",
+  amountCents: 489,
+  currency: "CAD",
+  itemCategory: "digital_product",
   giftCardRequested: false,
   urgencyLevel: "none",
   recipientFamiliarity: "established",
   paymentInstructionType: "normal",
   coerciveLanguagePresent: false,
   unusualForProfile: false,
-  userStatement: "Picking up the usual weekly groceries.",
+  userStatement: "Purchasing a low-cost digital cookbook from Gumroad.",
 };
 
 /** SCENARIO 2 — URGENT GIFT CARDS. Expected: REQUEST_TRUSTED_CONTACT. */

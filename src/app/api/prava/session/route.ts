@@ -4,7 +4,7 @@ import { appendAuditEvent } from "@/lib/audit";
 import { suffix6 } from "@/lib/prava/redact";
 
 export async function POST() {
-  const externalOrderRef = `grocery-gate-${Date.now()}`;
+  const externalOrderRef = `gumroad-gate-${Date.now()}`;
 
   try {
     const { data: result, httpStatus } = await createPravaSession({ externalOrderRef });

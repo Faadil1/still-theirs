@@ -318,7 +318,7 @@ function GateA2PageInner() {
         </p>
 
         <p className="mb-6 text-zinc-700 dark:text-zinc-300">
-          Routine purchase scenario: a small, everyday grocery order. This screen lets you
+          Routine purchase scenario: a small, low-cost digital cookbook purchase. This screen lets you
           walk through the secure payment check yourself, at your own pace.
         </p>
 
@@ -327,7 +327,7 @@ function GateA2PageInner() {
             <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
               Approved payment instruction
             </p>
-            <p className="mb-2 font-semibold">Routine groceries</p>
+            <p className="mb-2 font-semibold">Routine digital purchase</p>
             <dl className="mb-3 space-y-1 text-zinc-700 dark:text-zinc-300">
               <div className="flex justify-between">
                 <dt>Merchant</dt>
@@ -341,7 +341,7 @@ function GateA2PageInner() {
               </div>
               <div className="flex justify-between">
                 <dt>Purpose</dt>
-                <dd className="font-medium">Usual weekly groceries</dd>
+                <dd className="font-medium">Digital cookbook</dd>
               </div>
               <div className="flex justify-between">
                 <dt>Credential scope</dt>

@@ -93,20 +93,20 @@ export async function createPravaSession(input: CreateGrocerySessionInput): Prom
   const body = {
     user_id: PRAVA_TEST_USER_ID,
     user_email: PRAVA_TEST_USER_EMAIL,
-    total_amount: "45.00",
-    currency: "USD",
+    total_amount: "4.89",
+    currency: "CAD",
     purchase_context: [
       {
         merchant_details: {
-          name: "Everyday Grocery Demo",
-          url: "https://example.com",
+          name: "Gumroad",
+          url: "https://gumroad.com",
           country_code_iso2: "US",
         },
         product_details: [
           {
-            product_id: "weekly-groceries",
-            description: "Usual weekly groceries",
-            unit_price: "45.00",
+            product_id: "gumroad-digital-cookbook",
+            description: "300+ Meals List WITH RECIPES - A Very Beginner Friendly Cookbook",
+            unit_price: "4.89",
             quantity: 1,
           },
         ],
@@ -114,7 +114,7 @@ export async function createPravaSession(input: CreateGrocerySessionInput): Prom
     ],
     integration_type: "embedding",
     external_order_ref: input.externalOrderRef,
-    description: "Routine grocery purchase technical gate",
+    description: "Controlled Gumroad digital cookbook sandbox checkout",
   };
 
   let res: Response;

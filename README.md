@@ -48,10 +48,18 @@ Human purchase intent
 
 **Routine purchase**
 - Deterministic decision: `APPROVE`.
+- The routine example is a controlled Gumroad digital-product checkout: merchant Gumroad, product "300+ Meals List WITH RECIPES - A Very Beginner Friendly Cookbook", subtotal CA$4.25, tax CA$0.64, tip CA$0.00 — final checkout total (including tax) CA$4.89.
 - The user sees the payment instruction (merchant, maximum amount, purpose, one-purchase-only scope) before anything is sent anywhere.
 - The user explicitly continues.
-- Only then can a Prava session be created.
+- Only then can a Prava session be created, with a maximum authorized amount of CA$4.89 matching the final Gumroad checkout total.
 - Sandbox credential generation was verified.
+
+**E039 — controlled Gumroad merchant checkout (not yet performed)**
+
+This scenario's values are prepared for one forthcoming controlled sandbox merchant-checkout test at Gumroad. That evidence entry (E039) has not been recorded yet — this README only documents the prepared purchase facts, not a completed test. When run:
+- exactly one merchant checkout attempt will be made, using the sandbox test card documented in `docs/API_CONTRACT_NOTES.md`;
+- a sandbox decline is the expected outcome, not a failure;
+- no fallback or alternate payment method may be used if the sandbox card is declined.
 
 **Unusual purchase**
 - Deterministic decision: `REQUEST_TRUSTED_CONTACT`.

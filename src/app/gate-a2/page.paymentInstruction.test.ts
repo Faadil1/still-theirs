@@ -12,12 +12,13 @@ describe("Gate A2 page — Visa Intelligent Commerce approved-payment-instructio
     const panel = source.slice(panelStart, source.indexOf("Sandbox only", panelStart));
 
     expect(panel).toContain("Approved payment instruction");
-    expect(panel).toContain("Routine groceries");
+    expect(panel).toContain("Routine digital purchase");
     expect(panel).toMatch(/<dt>Merchant<\/dt>/);
     expect(panel).toMatch(/<dt>Maximum amount<\/dt>/);
     expect(panel).toMatch(/<dt>Purpose<\/dt>/);
     expect(panel).toMatch(/<dt>Credential scope<\/dt>/);
     expect(panel).toContain("One purchase only");
+    expect(panel).toContain("Digital cookbook");
     expect(panel).toContain("Still Theirs approved the purchase intent.");
     expect(panel).toContain("No Prava session exists until you create it below.");
   });

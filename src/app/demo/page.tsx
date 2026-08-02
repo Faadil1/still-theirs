@@ -7,8 +7,8 @@ import { DemoFlowController, type AnalyzeResultShape, type TrustedContactChoice 
 
 const SCENARIO_LABELS: Record<DemoScenarioId, { title: string; description: string; expected: string }> = {
   "routine-groceries": {
-    title: "Routine groceries",
-    description: "A small, everyday grocery order from a familiar merchant.",
+    title: "Routine digital purchase",
+    description: "A small, low-cost digital cookbook purchase from a familiar platform.",
     expected: "Expected: eligible to proceed",
   },
   "urgent-gift-cards": {
@@ -254,7 +254,7 @@ export default function DemoPage() {
                   </div>
                   <div className="flex justify-between">
                     <dt>Purpose</dt>
-                    <dd className="font-medium">Usual weekly groceries</dd>
+                    <dd className="font-medium">Digital cookbook</dd>
                   </div>
                   <div className="flex justify-between">
                     <dt>Credential scope</dt>

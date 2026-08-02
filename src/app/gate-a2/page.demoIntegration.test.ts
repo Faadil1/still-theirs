@@ -85,7 +85,7 @@ describe("APPROVE (/demo) -> PHONE_ONLY (/gate-a2) integration", () => {
       const panelStart = source.indexOf('sourceParam === "demo" && (');
       expect(panelStart).toBeGreaterThan(-1);
       const panel = source.slice(panelStart, source.indexOf("Sandbox only", panelStart));
-      expect(panel).toContain("Routine groceries");
+      expect(panel).toContain("Routine digital purchase");
       expect(panel).toContain("Approved payment instruction");
       expect(panel).toContain("Still Theirs approved the purchase intent.");
       expect(panel).toContain("No Prava session exists until you create it below.");
