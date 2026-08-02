@@ -47,3 +47,10 @@ debug-response*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+.vercel
+.env*
+.vercel-old-project/
+notepad-recovery-*/
+
+!.env.example
