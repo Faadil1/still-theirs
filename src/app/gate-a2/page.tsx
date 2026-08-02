@@ -2,9 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import { PravaSDK } from "@prava-sdk/core";
+import QRCode from "qrcode";
 import { GateA2Controller, type GateA2PublicState } from "@/lib/gateA2/sessionManager";
 import { SdkInitGuard } from "@/lib/gateA2/sdkGuard";
 import { getClientEnv } from "@/lib/env";
+import { shouldAutoHideQr } from "@/lib/gateA2/qrPanel";
+
+// Development/sandbox-only helper: transfers the transient iframe URL to a
+// phone via a client-generated QR code. Never rendered in production.
+const IS_DEV_OR_SANDBOX = process.env.NODE_ENV !== "production";
 
 const STATUS_MESSAGES: Record<GateA2PublicState["status"], string> = {
   IDLE: "Ready when you are.",
@@ -37,6 +43,13 @@ export default function GateA2Page() {
 
   const [publicState, setPublicState] = useState<GateA2PublicState>(() => controller.getPublicState());
 
+  // QR phone-transfer panel state. The iframe URL itself is never stored in
+  // React state — it is read directly from controller.getSessionForSdk()
+  // only at the moment the QR is drawn, and never rendered as text.
+  const qrCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [qrPanelOpen, setQrPanelOpen] = useState(false);
+  const qrOpenedAtRef = useRef<number | null>(null);
+
   function sync() {
     setPublicState(controller.getPublicState());
   }
@@ -59,10 +72,24 @@ export default function GateA2Page() {
     }
   }
 
+  function closeQrPanel() {
+    setQrPanelOpen(false);
+    qrOpenedAtRef.current = null;
+  }
+
+  function handleOpenOnPhone() {
+    if (!IS_DEV_OR_SANDBOX) return;
+    const sessionForSdk = controller.getSessionForSdk();
+    if (!sessionForSdk) return;
+    qrOpenedAtRef.current = Date.now();
+    setQrPanelOpen(true);
+  }
+
   function handleCancel() {
     sdkGuard.destroy();
     mountedForSessionRef.current = null;
     if (containerRef.current) containerRef.current.innerHTML = "";
+    closeQrPanel();
     controller.cancel();
     sync();
     void postGateA2Event("gateA2.flow.cancelled", { cancelled: true });
@@ -171,6 +198,43 @@ export default function GateA2Page() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Draws the QR code directly into the canvas when the panel opens. The
+  // iframe URL is read fresh from the controller here and never stored in
+  // React state, logged, or rendered as text.
+  useEffect(() => {
+    if (!qrPanelOpen) return;
+    const sessionForSdk = controller.getSessionForSdk();
+    if (!sessionForSdk || !qrCanvasRef.current) {
+      closeQrPanel();
+      return;
+    }
+    QRCode.toCanvas(qrCanvasRef.current, sessionForSdk.iframeUrl, { width: 220, margin: 1 }).catch(() => {
+      closeQrPanel();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qrPanelOpen]);
+
+  // Auto-hides the QR after 60 seconds or as soon as the session's
+  // expires_at passes, whichever comes first.
+  useEffect(() => {
+    if (!qrPanelOpen) return;
+    const interval = setInterval(() => {
+      if (shouldAutoHideQr(qrOpenedAtRef.current, publicState.expiresAt, Date.now())) {
+        closeQrPanel();
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [qrPanelOpen, publicState.expiresAt]);
+
+  // Hides the QR whenever the session is no longer active — covers reset,
+  // cancel, completion, and error paths generically. Deferred to a
+  // microtask since this effect only reacts to state that already changed.
+  useEffect(() => {
+    if (publicState.status !== "READY_FOR_CARD" && publicState.status !== "AWAITING_USER_AUTHENTICATION") {
+      queueMicrotask(closeQrPanel);
+    }
+  }, [publicState.status]);
+
   const canStart = publicState.status === "IDLE" || publicState.status === "CANCELLED" || publicState.status === "SAFE_ERROR" || publicState.status === "COMPLETED";
   const canCancel = publicState.status === "CREATING_SESSION" || publicState.status === "READY_FOR_CARD" || publicState.status === "AWAITING_USER_AUTHENTICATION";
 
@@ -201,12 +265,36 @@ export default function GateA2Page() {
           </button>
         )}
 
+        {IS_DEV_OR_SANDBOX &&
+          publicState.sessionIdPresent &&
+          (publicState.status === "READY_FOR_CARD" || publicState.status === "AWAITING_USER_AUTHENTICATION") &&
+          !qrPanelOpen && (
+            <button
+              onClick={handleOpenOnPhone}
+              className="mb-4 ml-2 rounded border border-zinc-400 px-4 py-2 text-xs"
+            >
+              Open on phone (dev only)
+            </button>
+          )}
+
         <p className="mb-4 rounded border border-zinc-300 p-3 dark:border-zinc-700">
           {STATUS_MESSAGES[publicState.status]}
           {publicState.status === "SAFE_ERROR" && publicState.pravaErrorCode && (
             <span className="mt-1 block text-xs text-zinc-500">Code: {publicState.pravaErrorCode}</span>
           )}
         </p>
+
+        {qrPanelOpen && (
+          <div className="mb-4 rounded border border-zinc-300 p-4 text-center dark:border-zinc-700">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
+              Temporary Prava session — expires shortly
+            </p>
+            <canvas ref={qrCanvasRef} className="mx-auto" aria-label="QR code to open this Prava session on your phone" />
+            <button onClick={closeQrPanel} className="mt-3 rounded border border-zinc-400 px-3 py-1 text-xs">
+              Close
+            </button>
+          </div>
+        )}
 
         <div id="prava-card-form" ref={containerRef} className="min-h-[1px]" />
       </div>

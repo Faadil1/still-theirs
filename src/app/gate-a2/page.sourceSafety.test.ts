@@ -22,7 +22,7 @@ describe("Gate A2 page source safety (static regression checks)", () => {
     // getSessionForSdk() is the only place session/token values are read from
     // the controller, and it must only ever be called for collectPAN(), not
     // interpolated into rendered text.
-    const jsxReturnStart = source.indexOf("return (");
+    const jsxReturnStart = source.lastIndexOf("return (\n    <div");
     const jsxSection = source.slice(jsxReturnStart);
     expect(jsxSection).not.toMatch(/sessionToken/);
     expect(jsxSection).not.toMatch(/iframeUrl/);
@@ -45,5 +45,73 @@ describe("Gate A2 page source safety (static regression checks)", () => {
     const publicStateFn = source.slice(source.indexOf("getPublicState()"), source.indexOf("getSessionForSdk"));
     expect(publicStateFn).toMatch(/suffix6\(/);
     expect(publicStateFn).not.toMatch(/this\.session\.sessionId,/);
+  });
+
+  describe("QR phone-transfer panel (dev-only)", () => {
+    it("gates the QR feature behind a non-production check", async () => {
+      const source = await fs.readFile(PAGE_PATH, "utf-8");
+      expect(source).toMatch(/IS_DEV_OR_SANDBOX\s*=\s*process\.env\.NODE_ENV\s*!==\s*"production"/);
+    });
+
+    it("only sets the QR panel visible inside the explicit handleOpenOnPhone action, never in a mount/session effect", async () => {
+      const source = await fs.readFile(PAGE_PATH, "utf-8");
+      const setVisibleCalls = source.match(/setQrPanelOpen\(true\)/g) ?? [];
+      expect(setVisibleCalls.length).toBe(1);
+
+      const handlerStart = source.indexOf("function handleOpenOnPhone");
+      const handlerEnd = source.indexOf("\n  }", handlerStart);
+      const handlerBody = source.slice(handlerStart, handlerEnd);
+      expect(handlerBody).toContain("setQrPanelOpen(true)");
+      expect(handlerBody).toMatch(/if \(!IS_DEV_OR_SANDBOX\) return;/);
+      expect(handlerBody).toMatch(/if \(!sessionForSdk\) return;/);
+    });
+
+    it("handleOpenOnPhone never creates a Prava session (no fetch, no startSession call)", async () => {
+      const source = await fs.readFile(PAGE_PATH, "utf-8");
+      const handlerStart = source.indexOf("function handleOpenOnPhone");
+      const handlerEnd = source.indexOf("\n  }", handlerStart);
+      const handlerBody = source.slice(handlerStart, handlerEnd);
+      expect(handlerBody).not.toMatch(/fetch\(/);
+      expect(handlerBody).not.toMatch(/startSession/);
+    });
+
+    it("handleCancel closes the QR panel (QR disappears on reset/cancel)", async () => {
+      const source = await fs.readFile(PAGE_PATH, "utf-8");
+      const handlerStart = source.indexOf("function handleCancel");
+      const handlerEnd = source.indexOf("\n  }", handlerStart);
+      const handlerBody = source.slice(handlerStart, handlerEnd);
+      expect(handlerBody).toContain("closeQrPanel()");
+    });
+
+    it("never renders the raw iframe URL as visible text, never adds a copy-to-clipboard control, and only draws it into a canvas", async () => {
+      const source = await fs.readFile(PAGE_PATH, "utf-8");
+      const jsxReturnStart = source.lastIndexOf("return (\n    <div");
+      const jsxSection = source.slice(jsxReturnStart);
+
+      expect(jsxSection).not.toMatch(/iframeUrl/);
+      expect(jsxSection).not.toMatch(/navigator\.clipboard/i);
+      expect(jsxSection).not.toMatch(/copy/i);
+      expect(jsxSection).toContain("<canvas");
+      expect(jsxSection).toContain("Temporary Prava session");
+    });
+
+    it("the iframe URL is read only twice (collectPAN mount, QR draw) and never passed to fetch/JSON.stringify/postGateA2Event", async () => {
+      const source = await fs.readFile(PAGE_PATH, "utf-8");
+      const occurrences = source.match(/\.iframeUrl\b/g) ?? [];
+      expect(occurrences.length).toBe(2);
+
+      for (const match of source.matchAll(/.{0,80}\.iframeUrl\b.{0,80}/g)) {
+        const window = match[0];
+        expect(window).not.toMatch(/postGateA2Event/);
+        expect(window).not.toMatch(/JSON\.stringify/);
+        expect(window).not.toMatch(/fetch\(/);
+      }
+    });
+
+    it("never uses an external QR-generation API — only the local qrcode package", async () => {
+      const source = await fs.readFile(PAGE_PATH, "utf-8");
+      expect(source).toMatch(/from "qrcode"/);
+      expect(source).not.toMatch(/api\.qrserver\.com|qrcode-monkey|goqr\.me/i);
+    });
   });
 });
