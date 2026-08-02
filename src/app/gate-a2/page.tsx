@@ -12,6 +12,8 @@ import { shouldAutoHideQr } from "@/lib/gateA2/qrPanel";
 // phone via a client-generated QR code. Never rendered in production.
 const IS_DEV_OR_SANDBOX = process.env.NODE_ENV !== "production";
 
+type GateA2Mode = "DESKTOP_EMBEDDED" | "PHONE_ONLY";
+
 const STATUS_MESSAGES: Record<GateA2PublicState["status"], string> = {
   IDLE: "Ready when you are.",
   CREATING_SESSION: "Setting up a secure sandbox session...",
@@ -20,6 +22,14 @@ const STATUS_MESSAGES: Record<GateA2PublicState["status"], string> = {
   COMPLETED: "Card verification completed.",
   CANCELLED: "Cancelled. Nothing was charged.",
   SAFE_ERROR: "Something didn't go through. You can try again.",
+};
+
+// PHONE_ONLY mode never mounts collectPAN, so it needs its own status
+// copy — the desktop card-entry messages above don't apply.
+const PHONE_ONLY_STATUS_MESSAGES: Partial<Record<GateA2PublicState["status"], string>> = {
+  READY_FOR_CARD: "Complete the verification on your phone. Confirm the result using the Prava screen or dashboard.",
+  AWAITING_USER_AUTHENTICATION:
+    "Complete the verification on your phone. Confirm the result using the Prava screen or dashboard.",
 };
 
 async function postGateA2Event(event: string, detail: Record<string, unknown> = {}): Promise<void> {
@@ -42,6 +52,7 @@ export default function GateA2Page() {
   const mountedForSessionRef = useRef<string | null>(null);
 
   const [publicState, setPublicState] = useState<GateA2PublicState>(() => controller.getPublicState());
+  const [mode, setMode] = useState<GateA2Mode | null>(null);
 
   // QR phone-transfer panel state. The iframe URL itself is never stored in
   // React state — it is read directly from controller.getSessionForSdk()
@@ -54,7 +65,13 @@ export default function GateA2Page() {
     setPublicState(controller.getPublicState());
   }
 
-  async function handleStart() {
+  function selectMode(m: GateA2Mode) {
+    // Mode may only be chosen before any session exists.
+    if (publicState.status !== "IDLE" && publicState.status !== "CANCELLED" && publicState.status !== "SAFE_ERROR" && publicState.status !== "COMPLETED") return;
+    setMode(m);
+  }
+
+  async function createSession(): Promise<boolean> {
     await controller.startSession(async () => {
       const res = await fetch("/api/prava/session", { method: "POST" });
       return { ok: res.ok, status: res.status, json: () => res.json() };
@@ -69,7 +86,26 @@ export default function GateA2Page() {
         orderIdPresent: state.orderIdPresent,
         orderIdSuffix: state.orderIdSuffix,
       });
+      return true;
     }
+    return false;
+  }
+
+  // DESKTOP_EMBEDDED: create the session; the mount effect below picks it up.
+  async function handleStart() {
+    await createSession();
+  }
+
+  // PHONE_ONLY: create the session, then immediately display the QR.
+  // This path never touches PravaSDK/collectPAN and never mounts anything —
+  // the iframe URL's only use here is as QR-encoder input.
+  async function handleCreatePhoneSession() {
+    const ready = await createSession();
+    if (!ready) return;
+    const sessionForSdk = controller.getSessionForSdk();
+    if (!sessionForSdk) return;
+    qrOpenedAtRef.current = Date.now();
+    setQrPanelOpen(true);
   }
 
   function closeQrPanel() {
@@ -92,11 +128,15 @@ export default function GateA2Page() {
     closeQrPanel();
     controller.cancel();
     sync();
+    setMode(null);
     void postGateA2Event("gateA2.flow.cancelled", { cancelled: true });
   }
 
   // Mount the embedded card-collection UI exactly once per fresh session.
+  // PHONE_ONLY mode never reaches this: it must never initialize PravaSDK,
+  // call collectPAN, or mount an iframe on the desktop.
   useEffect(() => {
+    if (mode !== "DESKTOP_EMBEDDED") return;
     if (publicState.status !== "READY_FOR_CARD") return;
     if (!containerRef.current) return;
 
@@ -188,7 +228,7 @@ export default function GateA2Page() {
         void postErrorDiagnostics();
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [publicState.status, publicState.sessionIdSuffix, publicState.orderIdSuffix]);
+  }, [mode, publicState.status, publicState.sessionIdSuffix, publicState.orderIdSuffix]);
 
   // Cleanup on unmount only.
   useEffect(() => {
@@ -251,21 +291,51 @@ export default function GateA2Page() {
           walk through the secure payment check yourself, at your own pace.
         </p>
 
-        <button
-          onClick={handleStart}
-          disabled={!canStart || publicState.status === "CREATING_SESSION"}
-          className="mb-4 rounded bg-black px-4 py-2 text-white disabled:opacity-50 dark:bg-white dark:text-black"
-        >
-          {publicState.status === "CREATING_SESSION" ? "Setting up..." : "Start secure payment check"}
-        </button>
+        {mode === null && (
+          <div className="mb-4 flex gap-2">
+            <button
+              onClick={() => selectMode("DESKTOP_EMBEDDED")}
+              className="rounded bg-black px-4 py-2 text-white dark:bg-white dark:text-black"
+            >
+              Use this computer
+            </button>
+            <button
+              onClick={() => selectMode("PHONE_ONLY")}
+              className="rounded border border-zinc-400 px-4 py-2"
+            >
+              Use my phone
+            </button>
+          </div>
+        )}
 
-        {canCancel && (
+        {mode === "DESKTOP_EMBEDDED" && (
+          <button
+            onClick={handleStart}
+            disabled={!canStart || publicState.status === "CREATING_SESSION"}
+            className="mb-4 rounded bg-black px-4 py-2 text-white disabled:opacity-50 dark:bg-white dark:text-black"
+          >
+            {publicState.status === "CREATING_SESSION" ? "Setting up..." : "Start secure payment check"}
+          </button>
+        )}
+
+        {mode === "PHONE_ONLY" && (
+          <button
+            onClick={handleCreatePhoneSession}
+            disabled={!canStart || publicState.status === "CREATING_SESSION"}
+            className="mb-4 rounded bg-black px-4 py-2 text-white disabled:opacity-50 dark:bg-white dark:text-black"
+          >
+            {publicState.status === "CREATING_SESSION" ? "Setting up..." : "Create phone session"}
+          </button>
+        )}
+
+        {mode !== null && canCancel && (
           <button onClick={handleCancel} className="mb-4 ml-2 rounded border border-zinc-400 px-4 py-2">
             Cancel
           </button>
         )}
 
-        {IS_DEV_OR_SANDBOX &&
+        {mode === "DESKTOP_EMBEDDED" &&
+          IS_DEV_OR_SANDBOX &&
           publicState.sessionIdPresent &&
           (publicState.status === "READY_FOR_CARD" || publicState.status === "AWAITING_USER_AUTHENTICATION") &&
           !qrPanelOpen && (
@@ -277,17 +347,23 @@ export default function GateA2Page() {
             </button>
           )}
 
-        <p className="mb-4 rounded border border-zinc-300 p-3 dark:border-zinc-700">
-          {STATUS_MESSAGES[publicState.status]}
-          {publicState.status === "SAFE_ERROR" && publicState.pravaErrorCode && (
-            <span className="mt-1 block text-xs text-zinc-500">Code: {publicState.pravaErrorCode}</span>
-          )}
-        </p>
+        {mode !== null && (
+          <p className="mb-4 rounded border border-zinc-300 p-3 dark:border-zinc-700">
+            {mode === "PHONE_ONLY" && PHONE_ONLY_STATUS_MESSAGES[publicState.status]
+              ? PHONE_ONLY_STATUS_MESSAGES[publicState.status]
+              : STATUS_MESSAGES[publicState.status]}
+            {publicState.status === "SAFE_ERROR" && publicState.pravaErrorCode && (
+              <span className="mt-1 block text-xs text-zinc-500">Code: {publicState.pravaErrorCode}</span>
+            )}
+          </p>
+        )}
 
         {qrPanelOpen && (
           <div className="mb-4 rounded border border-zinc-300 p-4 text-center dark:border-zinc-700">
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
-              Temporary Prava session — expires shortly
+              {mode === "PHONE_ONLY"
+                ? "Open once on your phone — do not open this session on this computer"
+                : "Temporary Prava session — expires shortly"}
             </p>
             <canvas ref={qrCanvasRef} className="mx-auto" aria-label="QR code to open this Prava session on your phone" />
             <button onClick={closeQrPanel} className="mt-3 rounded border border-zinc-400 px-3 py-1 text-xs">
@@ -296,7 +372,7 @@ export default function GateA2Page() {
           </div>
         )}
 
-        <div id="prava-card-form" ref={containerRef} className="min-h-[1px]" />
+        {mode === "DESKTOP_EMBEDDED" && <div id="prava-card-form" ref={containerRef} className="min-h-[1px]" />}
       </div>
     </div>
   );

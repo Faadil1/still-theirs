@@ -53,10 +53,10 @@ describe("Gate A2 page source safety (static regression checks)", () => {
       expect(source).toMatch(/IS_DEV_OR_SANDBOX\s*=\s*process\.env\.NODE_ENV\s*!==\s*"production"/);
     });
 
-    it("only sets the QR panel visible inside the explicit handleOpenOnPhone action, never in a mount/session effect", async () => {
+    it("only sets the QR panel visible inside the two explicit user actions (handleOpenOnPhone, handleCreatePhoneSession), never in a mount/session effect", async () => {
       const source = await fs.readFile(PAGE_PATH, "utf-8");
       const setVisibleCalls = source.match(/setQrPanelOpen\(true\)/g) ?? [];
-      expect(setVisibleCalls.length).toBe(1);
+      expect(setVisibleCalls.length).toBe(2);
 
       const handlerStart = source.indexOf("function handleOpenOnPhone");
       const handlerEnd = source.indexOf("\n  }", handlerStart);
@@ -66,7 +66,7 @@ describe("Gate A2 page source safety (static regression checks)", () => {
       expect(handlerBody).toMatch(/if \(!sessionForSdk\) return;/);
     });
 
-    it("handleOpenOnPhone never creates a Prava session (no fetch, no startSession call)", async () => {
+    it("handleOpenOnPhone (dev-reopen for an existing desktop session) never creates another Prava session", async () => {
       const source = await fs.readFile(PAGE_PATH, "utf-8");
       const handlerStart = source.indexOf("function handleOpenOnPhone");
       const handlerEnd = source.indexOf("\n  }", handlerStart);
@@ -112,6 +112,82 @@ describe("Gate A2 page source safety (static regression checks)", () => {
       const source = await fs.readFile(PAGE_PATH, "utf-8");
       expect(source).toMatch(/from "qrcode"/);
       expect(source).not.toMatch(/api\.qrserver\.com|qrcode-monkey|goqr\.me/i);
+    });
+  });
+
+  describe("PHONE_ONLY mode (single-use session, no desktop SDK)", () => {
+    it("the collectPAN mount effect is gated on mode === DESKTOP_EMBEDDED before any PravaSDK/collectPAN usage — PHONE_ONLY never reaches it", async () => {
+      const source = await fs.readFile(PAGE_PATH, "utf-8");
+      const mountEffectStart = source.indexOf("// Mount the embedded card-collection UI");
+      const mountEffectBody = source.slice(mountEffectStart, source.indexOf("}, [mode, publicState.status"));
+      const guardIndex = mountEffectBody.indexOf('if (mode !== "DESKTOP_EMBEDDED") return;');
+      const sdkIndex = mountEffectBody.indexOf("new PravaSDK");
+      const collectPanIndex = mountEffectBody.indexOf(".collectPAN(");
+      expect(guardIndex).toBeGreaterThan(-1);
+      expect(sdkIndex).toBeGreaterThan(guardIndex);
+      expect(collectPanIndex).toBeGreaterThan(guardIndex);
+    });
+
+    it("the Prava card-form container is only rendered in DESKTOP_EMBEDDED mode", async () => {
+      const source = await fs.readFile(PAGE_PATH, "utf-8");
+      expect(source).toMatch(/mode === "DESKTOP_EMBEDDED" && <div id="prava-card-form"/);
+    });
+
+    it("handleCreatePhoneSession creates exactly one session, only opens the QR after success, and never touches PravaSDK/collectPAN", async () => {
+      const source = await fs.readFile(PAGE_PATH, "utf-8");
+      const handlerStart = source.indexOf("async function handleCreatePhoneSession");
+      const handlerEnd = source.indexOf("\n  }", handlerStart);
+      const handlerBody = source.slice(handlerStart, handlerEnd);
+
+      const createCalls = handlerBody.match(/createSession\(\)/g) ?? [];
+      expect(createCalls.length).toBe(1);
+      expect(handlerBody).toMatch(/if \(!ready\) return;/);
+      expect(handlerBody).toContain("setQrPanelOpen(true)");
+      expect(handlerBody).not.toMatch(/PravaSDK/);
+      expect(handlerBody).not.toMatch(/collectPAN/);
+    });
+
+    it("nothing on the desktop opens, preloads, fetches, or navigates to the iframe URL — its only use is as QR-encoder input", async () => {
+      const source = await fs.readFile(PAGE_PATH, "utf-8");
+      // Every read of .iframeUrl must be immediately followed by either the
+      // collectPAN call (desktop mode) or QRCode.toCanvas (phone/QR mode).
+      for (const match of source.matchAll(/.{0,100}\.iframeUrl\b.{0,120}/g)) {
+        const window = match[0];
+        expect(window).not.toMatch(/window\.open/);
+        expect(window).not.toMatch(/<iframe/);
+        expect(window).not.toMatch(/\.src\s*=/);
+        expect(window).not.toMatch(/new Image/);
+        expect(window).not.toMatch(/HEAD/);
+        expect(window).not.toMatch(/link\.rel\s*=\s*["']prefetch["']/);
+        const usedByQr = /QRCode\.toCanvas/.test(window);
+        const usedByCollectPan = /iframeUrl:/.test(window);
+        expect(usedByQr || usedByCollectPan).toBe(true);
+      }
+    });
+
+    it("mode selection is only offered before any session exists, and cannot change once a session is active", async () => {
+      const source = await fs.readFile(PAGE_PATH, "utf-8");
+      const fnStart = source.indexOf("function selectMode");
+      const fnEnd = source.indexOf("\n  }", fnStart);
+      const fnBody = source.slice(fnStart, fnEnd);
+      expect(fnBody).toMatch(
+        /if \(publicState\.status !== "IDLE" && publicState\.status !== "CANCELLED" && publicState\.status !== "SAFE_ERROR" && publicState\.status !== "COMPLETED"\) return;/
+      );
+      // The mode-choice buttons are only rendered while mode is null.
+      expect(source).toMatch(/\{mode === null && \(/);
+    });
+
+    it("resetting (Cancel) clears mode back to null, returning to mode selection", async () => {
+      const source = await fs.readFile(PAGE_PATH, "utf-8");
+      const handlerStart = source.indexOf("function handleCancel");
+      const handlerEnd = source.indexOf("\n  }", handlerStart);
+      const handlerBody = source.slice(handlerStart, handlerEnd);
+      expect(handlerBody).toContain("setMode(null)");
+    });
+
+    it("PHONE_ONLY status copy never invents a callback success and points to the Prava screen/dashboard instead", async () => {
+      const source = await fs.readFile(PAGE_PATH, "utf-8");
+      expect(source).toMatch(/Complete the verification on your phone\. Confirm the result using the Prava screen or dashboard\./);
     });
   });
 });
