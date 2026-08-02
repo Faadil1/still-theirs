@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { promises as fs } from "fs";
 import path from "path";
 import { appendAuditEvent } from "./audit";
@@ -66,5 +66,75 @@ describe("appendAuditEvent", () => {
     const parsed = JSON.parse(raw);
     const markers = parsed.map((e: { detail: { marker: string } }) => e.detail.marker);
     expect(markers.sort()).toEqual(["one", "three", "two"]);
+  });
+
+  it("a filesystem write failure never rejects appendAuditEvent (must never interrupt the caller's flow)", async () => {
+    const writeSpy = vi.spyOn(fs, "writeFile").mockRejectedValue(new Error("disk full"));
+
+    await expect(appendAuditEvent("test.event", { marker: "should-not-throw" })).resolves.toBeUndefined();
+
+    writeSpy.mockRestore();
+  });
+
+  it("a read failure (e.g. corrupted or unreadable existing file) never rejects appendAuditEvent", async () => {
+    const readSpy = vi.spyOn(fs, "readFile").mockRejectedValue(new Error("permission denied"));
+    const writeSpy = vi.spyOn(fs, "writeFile").mockRejectedValue(new Error("permission denied"));
+
+    await expect(appendAuditEvent("test.event", { marker: "should-not-throw" })).resolves.toBeUndefined();
+
+    readSpy.mockRestore();
+    writeSpy.mockRestore();
+  });
+
+  it("a later write still succeeds after a prior write failure (the queue is not permanently blocked)", async () => {
+    const writeSpy = vi.spyOn(fs, "writeFile").mockRejectedValueOnce(new Error("transient failure"));
+
+    await appendAuditEvent("test.event.fails", { marker: "first" });
+    writeSpy.mockRestore();
+    await appendAuditEvent("test.event.succeeds", { marker: "second" });
+
+    const raw = await fs.readFile(AUDIT_LOG_PATH, "utf-8");
+    expect(raw).toContain("test.event.succeeds");
+  });
+});
+
+describe("appendAuditEvent in production", () => {
+  let originalContent: string;
+
+  beforeEach(async () => {
+    originalContent = await fs.readFile(AUDIT_LOG_PATH, "utf-8").catch(() => "[]");
+    vi.stubEnv("NODE_ENV", "production");
+  });
+
+  afterEach(async () => {
+    vi.unstubAllEnvs();
+    await fs.writeFile(AUDIT_LOG_PATH, originalContent, "utf-8");
+  });
+
+  it("never writes to the project filesystem in production — emits the redacted event via console.info instead", async () => {
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+
+    await appendAuditEvent("test.event", { session_token: "super-secret-jwt", httpStatus: 201 });
+
+    expect(infoSpy).toHaveBeenCalledTimes(1);
+    const logged = infoSpy.mock.calls[0][0] as string;
+    expect(logged).not.toContain("super-secret-jwt");
+    expect(logged).toContain("test.event");
+    expect(logged).toContain("201");
+
+    const raw = await fs.readFile(AUDIT_LOG_PATH, "utf-8");
+    expect(raw).toBe(originalContent);
+
+    infoSpy.mockRestore();
+  });
+
+  it("always resolves in production even if console.info itself throws", async () => {
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {
+      throw new Error("stdout closed");
+    });
+
+    await expect(appendAuditEvent("test.event", { marker: "value" })).resolves.toBeUndefined();
+
+    infoSpy.mockRestore();
   });
 });
