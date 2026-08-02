@@ -1,20 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { DEMO_SCENARIOS, type DemoScenarioId } from "@/lib/risk/scenarios";
 import { DemoFlowController, type AnalyzeResultShape, type TrustedContactChoice } from "@/lib/demo/demoFlow";
+import { ProductShell, ProductBrand, StatusBadge, SurfaceCard, DefinitionRow, PrimaryAction, SecondaryAction } from "@/components/ui";
 
-const SCENARIO_LABELS: Record<DemoScenarioId, { title: string; description: string; expected: string }> = {
+const SCENARIO_LABELS: Record<DemoScenarioId, { title: string; description: string; outcome: string }> = {
   "routine-groceries": {
     title: "Routine digital purchase",
     description: "A small, low-cost digital cookbook purchase from a familiar platform.",
-    expected: "Expected: eligible to proceed",
+    outcome: "Eligible for scoped payment",
   },
   "urgent-gift-cards": {
     title: "Urgent gift cards",
     description: "A new online contact urgently asking for several gift cards.",
-    expected: "Expected: pause for a second perspective",
+    outcome: "Pause before credential creation",
   },
 };
 
@@ -106,10 +106,10 @@ export default function DemoPage() {
   }
 
   // Sends a real, human-visible perspective request via Linq — separate
-  // from the local "Ask someone I trust" simulation above. Never reachable
-  // unless the decision is REQUEST_TRUSTED_CONTACT (guarded here, and again
-  // on the server side, by the API route itself). Never falls through to
-  // Prava on either success or failure.
+  // from the local "Preview trusted review" simulation below. Never
+  // reachable unless the decision is REQUEST_TRUSTED_CONTACT (guarded
+  // here, and again on the server side, by the API route itself). Never
+  // falls through to Prava on either success or failure.
   async function handleSendPerspectiveRequest() {
     if (linqStatus === "SENDING") return; // guards rapid double-clicks
     if (!result || result.decision !== "REQUEST_TRUSTED_CONTACT") return;
@@ -142,208 +142,227 @@ export default function DemoPage() {
   const scenario = selectedScenario ? DEMO_SCENARIOS[selectedScenario] : null;
 
   return (
-    <div className="min-h-screen bg-[#faf8f5] px-4 py-10 font-serif text-[#1c1a17] dark:bg-[#141210] dark:text-[#f2ede6] sm:px-8">
-      <div className="mx-auto max-w-2xl">
-        <header className="mb-10 text-center">
-          <p className="mb-2 text-xs font-sans font-medium uppercase tracking-[0.2em] text-[#8a7f6d] dark:text-[#a89a82]">
-            Still Theirs
-          </p>
-          <h1 className="text-2xl italic leading-snug sm:text-3xl">
-            The safest payment credential is sometimes the one that was never created.
-          </h1>
-        </header>
+    <ProductShell wide>
+      <header className="mb-10 text-center">
+        <ProductBrand />
+        <h1 className="font-serif text-2xl italic leading-snug text-[var(--st-text)] sm:text-3xl">
+          The safest payment credential is sometimes the one that was never created.
+        </h1>
+        <p className="mx-auto mt-3 max-w-xl font-sans text-sm text-[var(--st-text-secondary)]">
+          Still Theirs evaluates the purchase before any payment credential exists.
+        </p>
+      </header>
 
-        {view === "SELECT" && (
-          <section aria-label="Choose a scenario">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {(Object.keys(DEMO_SCENARIOS) as DemoScenarioId[]).map((id) => {
-                const isSelected = selectedScenario === id;
+      {view === "SELECT" && (
+        <section aria-label="Choose a scenario" className="mx-auto max-w-3xl">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {(Object.keys(DEMO_SCENARIOS) as DemoScenarioId[]).map((id) => {
+              const isSelected = selectedScenario === id;
+              return (
+                <button
+                  key={id}
+                  onClick={() => handleSelect(id)}
+                  aria-pressed={isSelected}
+                  className={`min-h-[44px] rounded-2xl border p-5 text-left font-sans transition duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--st-text-muted)] ${
+                    isSelected
+                      ? "border-[var(--st-text)] bg-[var(--st-surface)] shadow-[0_2px_14px_rgba(28,26,23,0.07)]"
+                      : "border-[var(--st-border)] bg-[var(--st-surface)]/60 hover:border-[var(--st-text-muted)]"
+                  }`}
+                >
+                  <div className="mb-1 font-serif text-lg text-[var(--st-text)]">{SCENARIO_LABELS[id].title}</div>
+                  <p className="mb-3 text-sm text-[var(--st-text-secondary)]">{SCENARIO_LABELS[id].description}</p>
+                  <StatusBadge tone={id === "routine-groceries" ? "safe" : "paused"}>
+                    {SCENARIO_LABELS[id].outcome}
+                  </StatusBadge>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-8 flex justify-center">
+            <PrimaryAction onClick={handleCheck} disabled={!controller.canSubmit()}>
+              Check this purchase
+            </PrimaryAction>
+          </div>
+
+          {error && <p className="mt-4 text-center font-sans text-sm text-[var(--st-text-muted)]">{error}</p>}
+        </section>
+      )}
+
+      {view === "ANALYZING" && (
+        <section aria-label="Analysis in progress" className="mx-auto max-w-xl">
+          <SurfaceCard>
+            <ol className="space-y-3 font-sans">
+              {ANALYSIS_STEPS.map((step, i) => {
+                const isDone = i < analysisStep;
+                const isActive = i === analysisStep;
                 return (
-                  <button
-                    key={id}
-                    onClick={() => handleSelect(id)}
-                    aria-pressed={isSelected}
-                    className={`rounded-lg border p-5 text-left font-sans transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8a7f6d] ${
-                      isSelected
-                        ? "border-[#1c1a17] bg-white shadow-sm dark:border-[#f2ede6] dark:bg-[#1c1a17]"
-                        : "border-[#ded6c8] bg-white/60 hover:border-[#b8ac95] dark:border-[#3a352c] dark:bg-[#1c1a17]/40"
+                  <li
+                    key={step}
+                    className={`flex items-center gap-3 text-sm transition-colors duration-200 ${
+                      isDone || isActive ? "text-[var(--st-text)]" : "text-[var(--st-text-muted)]"
                     }`}
                   >
-                    <div className="mb-1 font-serif text-lg">{SCENARIO_LABELS[id].title}</div>
-                    <p className="mb-2 text-sm text-[#5c5546] dark:text-[#c9bfa9]">{SCENARIO_LABELS[id].description}</p>
-                    <p className="text-xs uppercase tracking-wide text-[#8a7f6d] dark:text-[#a89a82]">
-                      {SCENARIO_LABELS[id].expected}
-                    </p>
-                  </button>
+                    <span
+                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-xs transition-colors duration-200 ${
+                        isDone
+                          ? "border-[var(--st-safe)] bg-[var(--st-safe)]/10 text-[var(--st-safe)]"
+                          : isActive
+                            ? "animate-pulse border-[var(--st-text)]"
+                            : "border-[var(--st-border)]"
+                      }`}
+                    >
+                      {isDone ? "✓" : ""}
+                    </span>
+                    {step}
+                  </li>
                 );
               })}
-            </div>
-
-            <div className="mt-8 flex justify-center">
-              <button
-                onClick={handleCheck}
-                disabled={!controller.canSubmit()}
-                className="rounded-full bg-[#1c1a17] px-8 py-3 font-sans text-sm font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-40 dark:bg-[#f2ede6] dark:text-[#1c1a17] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#8a7f6d]"
-              >
-                Check this purchase
-              </button>
-            </div>
-
-            {error && <p className="mt-4 text-center font-sans text-sm text-[#8a7f6d]">{error}</p>}
-          </section>
-        )}
-
-        {view === "ANALYZING" && (
-          <section aria-label="Analysis in progress" className="rounded-lg border border-[#ded6c8] bg-white/70 p-6 font-sans dark:border-[#3a352c] dark:bg-[#1c1a17]/40">
-            <ol className="space-y-3">
-              {ANALYSIS_STEPS.map((step, i) => (
-                <li key={step} className={`flex items-center gap-3 text-sm ${i <= analysisStep ? "text-[#1c1a17] dark:text-[#f2ede6]" : "text-[#b8ac95]"}`}>
-                  <span
-                    className={`flex h-5 w-5 items-center justify-center rounded-full border text-xs ${
-                      i <= analysisStep ? "border-[#1c1a17] dark:border-[#f2ede6]" : "border-[#ded6c8]"
-                    }`}
-                  >
-                    {i < analysisStep ? "✓" : ""}
-                  </span>
-                  {step}
-                </li>
-              ))}
             </ol>
-          </section>
-        )}
+            <p className="mt-5 border-t border-[var(--st-border)] pt-4 font-sans text-xs text-[var(--st-text-muted)]">
+              OpenAI explains the deterministic decision. It cannot override it.
+            </p>
+          </SurfaceCard>
+        </section>
+      )}
 
-        {view === "DECISION" && result && (
-          <section aria-label="Decision" className="space-y-5">
-            <div className="rounded-lg border border-[#ded6c8] bg-white/80 p-6 dark:border-[#3a352c] dark:bg-[#1c1a17]/50">
-              <p className="mb-1 font-sans text-xs uppercase tracking-[0.15em] text-[#8a7f6d] dark:text-[#a89a82]">
-                {result.decision === "APPROVE" ? "Eligible for secure payment" : "Payment paused before credential creation"}
-              </p>
-              <h2 className="mb-3 text-xl">{result.explanation.headline}</h2>
-              <p className="font-sans text-[#3a352c] dark:text-[#d8cfbd]">{result.explanation.calmExplanation}</p>
-            </div>
+      {view === "DECISION" && result && (
+        <section aria-label="Decision" className="mx-auto max-w-4xl space-y-6">
+          <div className="grid gap-6 lg:grid-cols-[1.3fr_1fr] lg:items-start">
+            <div className="space-y-6">
+              <SurfaceCard emphasis>
+                <StatusBadge tone={result.decision === "APPROVE" ? "safe" : "paused"}>
+                  {result.decision === "APPROVE" ? "Eligible for scoped payment" : "Purchase paused before credential creation"}
+                </StatusBadge>
+                <h2 className="mb-3 mt-3 font-serif text-xl text-[var(--st-text)]">{result.explanation.headline}</h2>
+                <p className="font-sans text-[var(--st-text-secondary)]">{result.explanation.calmExplanation}</p>
+              </SurfaceCard>
 
-            <div className="rounded-lg border border-[#ded6c8] bg-white/60 p-6 font-sans dark:border-[#3a352c] dark:bg-[#1c1a17]/30">
-              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[#5c5546] dark:text-[#c9bfa9]">
-                What we noticed
-              </h3>
-              <ul className="space-y-2">
-                {result.explanation.signals.map((s) => (
-                  <li key={s.code} className="text-sm text-[#3a352c] dark:text-[#d8cfbd]">
-                    {s.plainLanguage}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {result.decision === "APPROVE" && scenario && (
-              <div className="rounded-lg border border-[#ded6c8] bg-white/60 p-6 font-sans dark:border-[#3a352c] dark:bg-[#1c1a17]/30">
-                <p className="mb-1 text-xs uppercase tracking-[0.15em] text-[#8a7f6d] dark:text-[#a89a82]">
-                  Payment instruction
-                </p>
-                <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[#5c5546] dark:text-[#c9bfa9]">
-                  What the payment credential will be allowed to do
+              <SurfaceCard>
+                <h3 className="mb-3 font-sans text-sm font-semibold uppercase tracking-wide text-[var(--st-text-secondary)]">
+                  What we noticed
                 </h3>
-                <dl className="mb-4 space-y-2 text-sm text-[#3a352c] dark:text-[#d8cfbd]">
-                  <div className="flex justify-between">
-                    <dt>Merchant</dt>
-                    <dd className="font-medium">{scenario.merchantLabel}</dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt>Maximum amount</dt>
-                    <dd className="font-medium">{formatAmount(scenario.amountCents, scenario.currency)}</dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt>Purpose</dt>
-                    <dd className="font-medium">Digital cookbook</dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt>Credential scope</dt>
-                    <dd className="font-medium">One purchase only</dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt>Human confirmation</dt>
-                    <dd className="font-medium">Required before creation</dd>
-                  </div>
-                </dl>
-                <p className="mb-2 text-sm text-[#5c5546] dark:text-[#c9bfa9]">
-                  This instruction will be sent to Prava only after you explicitly continue.
-                </p>
-                <p className="text-xs text-[#8a7f6d] dark:text-[#a89a82]">Visa Intelligent Commerce-enabled through Prava.</p>
-              </div>
-            )}
+                <ul className="space-y-2">
+                  {result.explanation.signals.map((s) => (
+                    <li key={s.code} className="font-sans text-sm text-[var(--st-text-secondary)]">
+                      {s.plainLanguage}
+                    </li>
+                  ))}
+                </ul>
+              </SurfaceCard>
+            </div>
 
-            {result.decision === "APPROVE" ? (
-              <div className="rounded-lg border border-[#ded6c8] bg-white/60 p-6 font-sans dark:border-[#3a352c] dark:bg-[#1c1a17]/30">
-                <p className="mb-4 text-sm text-[#5c5546] dark:text-[#c9bfa9]">
-                  No payment credential has been created yet.
-                </p>
-                <Link
-                  href="/gate-a2?mode=phone&source=demo"
-                  className="inline-block rounded-full bg-[#1c1a17] px-6 py-2.5 text-sm font-medium text-white dark:bg-[#f2ede6] dark:text-[#1c1a17] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#8a7f6d]"
-                >
-                  Continue to secure payment
-                </Link>
-              </div>
-            ) : (
-              <div className="rounded-lg border border-[#1c1a17] bg-white p-6 font-sans dark:border-[#f2ede6] dark:bg-[#1c1a17]">
-                <p className="mb-4 text-lg italic">No credential was created.</p>
-                <dl className="mb-4 space-y-1 text-sm text-[#3a352c] dark:text-[#d8cfbd]">
-                  <div className="flex justify-between">
-                    <dt>Prava session created</dt>
-                    <dd className="font-medium">No</dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt>Payment credential created</dt>
-                    <dd className="font-medium">No</dd>
-                  </div>
-                </dl>
-                <button
-                  onClick={handleAskTrustedContact}
-                  className="rounded-full bg-[#1c1a17] px-6 py-2.5 text-sm font-medium text-white dark:bg-[#f2ede6] dark:text-[#1c1a17] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#8a7f6d]"
-                >
-                  Ask someone I trust
-                </button>
+            <div className="space-y-6 lg:sticky lg:top-8">
+              {result.decision === "APPROVE" && scenario && (
+                <SurfaceCard emphasis>
+                  <p className="mb-1 font-sans text-xs uppercase tracking-[0.15em] text-[var(--st-text-muted)]">
+                    Payment instruction
+                  </p>
+                  <h3 className="mb-3 font-sans text-sm font-semibold uppercase tracking-wide text-[var(--st-text-secondary)]">
+                    What the payment credential will be allowed to do
+                  </h3>
+                  <dl className="mb-4 space-y-2 font-sans text-sm text-[var(--st-text)]">
+                    <div className="flex justify-between">
+                      <dt>Merchant</dt>
+                      <dd className="font-medium">{scenario.merchantLabel}</dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt>Maximum amount</dt>
+                      <dd className="font-medium">{formatAmount(scenario.amountCents, scenario.currency)}</dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt>Purpose</dt>
+                      <dd className="font-medium">Digital cookbook</dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt>Credential scope</dt>
+                      <dd className="font-medium">One purchase only</dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt>Human confirmation</dt>
+                      <dd className="font-medium">Required before creation</dd>
+                    </div>
+                  </dl>
+                  <p className="mb-2 font-sans text-sm text-[var(--st-text-secondary)]">
+                    This instruction will be sent to Prava only after you explicitly continue.
+                  </p>
+                  <p className="font-sans text-xs text-[var(--st-text-muted)]">Visa Intelligent Commerce-enabled through Prava.</p>
+                </SurfaceCard>
+              )}
 
-                <div className="mt-4 border-t border-[#3a352c] pt-4 dark:border-[#f2ede6]/30">
-                  {linqStatus !== "SENT" && (
-                    <button
-                      onClick={handleSendPerspectiveRequest}
-                      disabled={linqStatus === "SENDING"}
-                      className="rounded-full border border-[#1c1a17] px-6 py-2.5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 dark:border-[#f2ede6] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#8a7f6d]"
-                    >
-                      {linqStatus === "SENDING" ? "Sending..." : linqStatus === "ERROR" ? "Try again" : "Send perspective request"}
-                    </button>
-                  )}
-                  {linqStatus === "ERROR" && linqError && (
-                    <p className="mt-2 text-sm text-[#8a7f6d] dark:text-[#a89a82]">{linqError}</p>
-                  )}
-                  {linqStatus === "SENT" && (
-                    <div className="text-sm text-[#3a352c] dark:text-[#d8cfbd]">
-                      <p>Perspective request sent through Linq</p>
-                      <p>No authority transferred</p>
+              {result.decision === "APPROVE" ? (
+                <SurfaceCard>
+                  <p className="mb-4 font-sans text-sm text-[var(--st-text-secondary)]">
+                    No payment credential has been created yet.
+                  </p>
+                  <PrimaryAction href="/gate-a2?mode=phone&source=demo" className="w-full">
+                    Continue to secure payment
+                  </PrimaryAction>
+                  <ol className="mt-5 space-y-1.5 font-sans text-xs text-[var(--st-text-muted)]">
+                    <li>1. Intent approved</li>
+                    <li>2. You explicitly continue</li>
+                    <li>3. Prava may create the scoped credential</li>
+                  </ol>
+                </SurfaceCard>
+              ) : (
+                <SurfaceCard className="border-[var(--st-paused)]/30">
+                  <p className="mb-4 font-serif text-lg italic text-[var(--st-text)]">No credential was created.</p>
+                  <dl className="mb-5 divide-y divide-[var(--st-border)]">
+                    <DefinitionRow term="Prava session" value="Not created" />
+                    <DefinitionRow term="Payment credential" value="Not created" />
+                    <DefinitionRow term="Trusted perspective" value={linqStatus === "SENT" ? "Sent through Linq" : "Available through Linq"} />
+                    <DefinitionRow term="Financial authority" value="Still yours" />
+                  </dl>
+
+                  {linqStatus === "SENT" ? (
+                    <SurfaceCard className="border-[var(--st-safe)]/30 bg-[var(--st-safe)]/5 p-4">
+                      <p className="mb-3 font-sans text-xs font-semibold uppercase tracking-[0.14em] text-[var(--st-safe)]">
+                        Perspective request sent
+                      </p>
+                      <dl className="space-y-1">
+                        <DefinitionRow term="Prava session" value="Not created" />
+                        <DefinitionRow term="Payment credential" value="Not created" />
+                        <DefinitionRow term="Trusted perspective" value="Sent through Linq" />
+                        <DefinitionRow term="Financial authority" value="Still yours" />
+                      </dl>
+                      <p className="mt-3 font-sans text-xs text-[var(--st-text-muted)]">No authority transferred.</p>
+                    </SurfaceCard>
+                  ) : (
+                    <div className="space-y-3">
+                      <PrimaryAction
+                        onClick={handleSendPerspectiveRequest}
+                        disabled={linqStatus === "SENDING"}
+                        className="w-full"
+                      >
+                        {linqStatus === "SENDING" ? "Sending..." : linqStatus === "ERROR" ? "Try again" : "Send perspective request via iMessage"}
+                      </PrimaryAction>
+                      {linqStatus === "ERROR" && linqError && (
+                        <p className="font-sans text-sm text-[var(--st-text-muted)]">{linqError}</p>
+                      )}
+                      <SecondaryAction onClick={handleAskTrustedContact} className="w-full">
+                        Preview trusted review
+                      </SecondaryAction>
                     </div>
                   )}
-                </div>
-              </div>
-            )}
-
-            <div className="text-center">
-              <button
-                onClick={handleReset}
-                className="font-sans text-sm text-[#8a7f6d] underline-offset-4 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8a7f6d]"
-              >
-                Start over
-              </button>
+                </SurfaceCard>
+              )}
             </div>
-          </section>
-        )}
+          </div>
 
-        {view === "TRUSTED_REVIEW" && scenario && (
-          <section aria-label="Review request" className="space-y-5 rounded-lg border border-[#ded6c8] bg-white/80 p-6 font-sans dark:border-[#3a352c] dark:bg-[#1c1a17]/50">
-            <p className="text-xs uppercase tracking-[0.15em] text-[#8a7f6d] dark:text-[#a89a82]">
+          <div className="text-center">
+            <SecondaryAction onClick={handleReset}>Start over</SecondaryAction>
+          </div>
+        </section>
+      )}
+
+      {view === "TRUSTED_REVIEW" && scenario && (
+        <section aria-label="Review request" className="mx-auto max-w-xl">
+          <SurfaceCard>
+            <StatusBadge tone="neutral">Trusted perspective — no payment authority</StatusBadge>
+            <p className="mb-2 mt-3 font-sans text-xs uppercase tracking-[0.15em] text-[var(--st-text-muted)]">
               Still Theirs local safety step — review request
             </p>
-            <dl className="space-y-2 text-sm text-[#3a352c] dark:text-[#d8cfbd]">
+            <dl className="mb-4 space-y-2 font-sans text-sm text-[var(--st-text-secondary)]">
               <div className="flex justify-between">
                 <dt>Merchant category</dt>
                 <dd>{scenario.merchantCategory}</dd>
@@ -354,76 +373,65 @@ export default function DemoPage() {
               </div>
             </dl>
             <div>
-              <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-[#5c5546] dark:text-[#c9bfa9]">
+              <h3 className="mb-2 font-sans text-sm font-semibold uppercase tracking-wide text-[var(--st-text-secondary)]">
                 What stood out
               </h3>
-              <ul className="space-y-1 text-sm text-[#3a352c] dark:text-[#d8cfbd]">
+              <ul className="space-y-1 font-sans text-sm text-[var(--st-text-secondary)]">
                 {result?.explanation.signals.map((s) => (
                   <li key={s.code}>{s.plainLanguage}</li>
                 ))}
               </ul>
             </div>
-            <div className="text-center">
-              <button
-                onClick={handleProceedToTrustedResponse}
-                className="rounded-full bg-[#1c1a17] px-6 py-2.5 text-sm font-medium text-white dark:bg-[#f2ede6] dark:text-[#1c1a17] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#8a7f6d]"
-              >
-                Continue
-              </button>
+            <div className="mt-5 text-center">
+              <PrimaryAction onClick={handleProceedToTrustedResponse}>Continue</PrimaryAction>
             </div>
-          </section>
-        )}
+          </SurfaceCard>
+        </section>
+      )}
 
-        {view === "TRUSTED_RESPONSE" && (
-          <section aria-label="Trusted contact response" className="space-y-5 rounded-lg border border-[#ded6c8] bg-white/80 p-6 font-sans dark:border-[#3a352c] dark:bg-[#1c1a17]/50">
-            <p className="text-xs uppercase tracking-[0.15em] text-[#8a7f6d] dark:text-[#a89a82]">
+      {view === "TRUSTED_RESPONSE" && (
+        <section aria-label="Trusted contact response" className="mx-auto max-w-xl">
+          <SurfaceCard>
+            <StatusBadge tone="neutral">Trusted perspective — no payment authority</StatusBadge>
+            <p className="mb-2 mt-3 font-sans text-xs uppercase tracking-[0.15em] text-[var(--st-text-muted)]">
               Trusted contact — their view only
             </p>
-            <p className="text-sm text-[#5c5546] dark:text-[#c9bfa9]">
+            <p className="mb-5 font-sans text-sm text-[var(--st-text-secondary)]">
               The trusted contact can share a view. They cannot purchase, approve payment, create a credential, or
               change this decision.
             </p>
             <div className="flex flex-col gap-3 sm:flex-row">
-              <button
-                onClick={() => handleTrustedChoice("CONSISTENT")}
-                className="flex-1 rounded-full border border-[#1c1a17] px-6 py-2.5 text-sm font-medium dark:border-[#f2ede6] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#8a7f6d]"
-              >
+              <SecondaryAction onClick={() => handleTrustedChoice("CONSISTENT")} className="flex-1">
                 This seems consistent
-              </button>
-              <button
-                onClick={() => handleTrustedChoice("RECOMMEND_PAUSE")}
-                className="flex-1 rounded-full border border-[#1c1a17] px-6 py-2.5 text-sm font-medium dark:border-[#f2ede6] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#8a7f6d]"
-              >
+              </SecondaryAction>
+              <SecondaryAction onClick={() => handleTrustedChoice("RECOMMEND_PAUSE")} className="flex-1">
                 I recommend pausing
-              </button>
+              </SecondaryAction>
             </div>
-          </section>
-        )}
+          </SurfaceCard>
+        </section>
+      )}
 
-        {view === "TRUSTED_RETURN" && (
-          <section aria-label="Return to user" className="space-y-5 rounded-lg border border-[#1c1a17] bg-white p-6 font-sans dark:border-[#f2ede6] dark:bg-[#1c1a17]">
-            <p className="text-xs uppercase tracking-[0.15em] text-[#8a7f6d] dark:text-[#a89a82]">Back to you</p>
-            <p className="text-[#3a352c] dark:text-[#d8cfbd]">
+      {view === "TRUSTED_RETURN" && (
+        <section aria-label="Return to user" className="mx-auto max-w-xl">
+          <SurfaceCard emphasis>
+            <p className="mb-2 font-sans text-xs uppercase tracking-[0.15em] text-[var(--st-text-muted)]">Back to you</p>
+            <p className="mb-2 font-sans text-[var(--st-text-secondary)]">
               Your trusted contact&rsquo;s recommendation:{" "}
-              <span className="font-medium">
+              <span className="font-medium text-[var(--st-text)]">
                 {trustedContactChoice === "CONSISTENT" ? "This seems consistent." : "They recommend pausing."}
               </span>
             </p>
-            <p className="text-[#3a352c] dark:text-[#d8cfbd]">The final choice remains yours. No credential was created.</p>
-            <p className="text-[#3a352c] dark:text-[#d8cfbd]">
+            <p className="mb-2 font-sans text-[var(--st-text-secondary)]">The final choice remains yours. No credential was created.</p>
+            <p className="mb-5 font-sans text-[var(--st-text-secondary)]">
               You can stop here, reconsider, or begin a new purchase later.
             </p>
             <div className="text-center">
-              <button
-                onClick={handleReset}
-                className="rounded-full bg-[#1c1a17] px-6 py-2.5 text-sm font-medium text-white dark:bg-[#f2ede6] dark:text-[#1c1a17] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#8a7f6d]"
-              >
-                Start over
-              </button>
+              <PrimaryAction onClick={handleReset}>Start over</PrimaryAction>
             </div>
-          </section>
-        )}
-      </div>
-    </div>
+          </SurfaceCard>
+        </section>
+      )}
+    </ProductShell>
   );
 }

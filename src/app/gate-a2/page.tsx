@@ -10,6 +10,7 @@ import { SdkInitGuard } from "@/lib/gateA2/sdkGuard";
 import { getClientEnv } from "@/lib/env";
 import { shouldAutoHideQr } from "@/lib/gateA2/qrPanel";
 import { ROUTINE_GROCERIES_INTENT } from "@/lib/risk/scenarios";
+import { ProductShell, ProductBrand, StatusBadge, SurfaceCard, PrimaryAction, SecondaryAction } from "@/components/ui";
 
 // This gate is fixed to the routine-groceries scenario — the same values
 // already sent in the Prava session request (src/lib/prava/server.ts) are
@@ -309,102 +310,116 @@ function GateA2PageInner() {
   const canStart = publicState.status === "IDLE" || publicState.status === "CANCELLED" || publicState.status === "SAFE_ERROR" || publicState.status === "COMPLETED";
   const canCancel = publicState.status === "CREATING_SESSION" || publicState.status === "READY_FOR_CARD" || publicState.status === "AWAITING_USER_AUTHENTICATION";
 
+  // Quiet step indicator only — never marks a step complete ahead of the
+  // actual controller/session state.
+  const sessionExists = publicState.status !== "IDLE";
+  const verificationComplete = publicState.status === "COMPLETED";
+
   return (
-    <div className="min-h-screen bg-zinc-50 p-8 font-sans text-sm text-black dark:bg-black dark:text-zinc-50">
-      <div className="mx-auto max-w-xl">
-        <h1 className="mb-1 text-xl font-bold">Still Theirs</h1>
-        <p className="mb-4 inline-block rounded bg-amber-200 px-2 py-1 text-xs font-semibold text-amber-900">
-          Sandbox test — no real charge
+    <ProductShell>
+      <header className="mb-8">
+        <ProductBrand />
+        <div className="mb-3">
+          <StatusBadge tone="neutral">Prava sandbox · no real charge</StatusBadge>
+        </div>
+        <h1 className="mb-2 font-serif text-2xl text-[var(--st-text)] sm:text-3xl">Create the scoped payment credential</h1>
+        <p className="font-sans text-sm text-[var(--st-text-secondary)]">
+          The purchase intent is approved. You remain in control of whether the Prava session is created.
         </p>
+      </header>
 
-        <p className="mb-6 text-zinc-700 dark:text-zinc-300">
-          Routine purchase scenario: a small, low-cost digital cookbook purchase. This screen lets you
-          walk through the secure payment check yourself, at your own pace.
-        </p>
+      <ol className="mb-6 flex flex-col gap-1.5 font-sans text-xs text-[var(--st-text-muted)] sm:flex-row sm:gap-6">
+        <li className={sessionExists || verificationComplete ? "text-[var(--st-safe)]" : "text-[var(--st-text)]"}>1. Purchase approved</li>
+        <li className={verificationComplete ? "text-[var(--st-safe)]" : sessionExists ? "text-[var(--st-text)]" : ""}>2. Create Prava session</li>
+        <li className={verificationComplete ? "text-[var(--st-safe)]" : ""}>3. Complete sandbox verification</li>
+      </ol>
 
-        {sourceParam === "demo" && (
-          <div className="mb-4 rounded border border-zinc-300 p-4 text-sm dark:border-zinc-700">
-            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
-              Approved payment instruction
-            </p>
-            <p className="mb-2 font-semibold">Routine digital purchase</p>
-            <dl className="mb-3 space-y-1 text-zinc-700 dark:text-zinc-300">
-              <div className="flex justify-between">
-                <dt>Merchant</dt>
-                <dd className="font-medium">{ROUTINE_GROCERIES_INTENT.merchantLabel}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt>Maximum amount</dt>
-                <dd className="font-medium">
-                  {formatAmount(ROUTINE_GROCERIES_INTENT.amountCents, ROUTINE_GROCERIES_INTENT.currency)}
-                </dd>
-              </div>
-              <div className="flex justify-between">
-                <dt>Purpose</dt>
-                <dd className="font-medium">Digital cookbook</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt>Credential scope</dt>
-                <dd className="font-medium">One purchase only</dd>
-              </div>
-            </dl>
-            <p className="mb-1 text-zinc-700 dark:text-zinc-300">Still Theirs approved the purchase intent.</p>
-            <p className="mb-2 text-zinc-700 dark:text-zinc-300">No Prava session exists until you create it below.</p>
-            <p className="text-xs text-zinc-500 dark:text-zinc-500">
-              Visa Intelligent Commerce-enabled through Prava.
-              <br />
-              Sandbox only — no real charge.
-            </p>
-          </div>
-        )}
+      {sourceParam === "demo" && (
+        <SurfaceCard emphasis className="mb-6">
+          <p className="mb-1 font-sans text-xs font-semibold uppercase tracking-wide text-[var(--st-text-muted)]">
+            Approved payment instruction
+          </p>
+          <p className="mb-3 font-serif text-lg text-[var(--st-text)]">Routine digital purchase</p>
+          <dl className="mb-3 space-y-1.5 font-sans text-sm text-[var(--st-text-secondary)]">
+            <div className="flex justify-between">
+              <dt>Merchant</dt>
+              <dd className="font-medium text-[var(--st-text)]">{ROUTINE_GROCERIES_INTENT.merchantLabel}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt>Maximum amount</dt>
+              <dd className="font-medium text-[var(--st-text)]">
+                {formatAmount(ROUTINE_GROCERIES_INTENT.amountCents, ROUTINE_GROCERIES_INTENT.currency)}
+              </dd>
+            </div>
+            <div className="flex justify-between">
+              <dt>Purpose</dt>
+              <dd className="font-medium text-[var(--st-text)]">Digital cookbook</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt>Credential scope</dt>
+              <dd className="font-medium text-[var(--st-text)]">One purchase only</dd>
+            </div>
+          </dl>
+          <p className="mb-1 font-sans text-sm text-[var(--st-text-secondary)]">Still Theirs approved the purchase intent.</p>
+          <p className="mb-3 font-sans text-sm text-[var(--st-text-secondary)]">No Prava session exists until you create it below.</p>
+          <p className="font-sans text-xs text-[var(--st-text-muted)]">
+            Visa Intelligent Commerce-enabled through Prava.
+            <br />
+            Sandbox only — no real charge.
+          </p>
+        </SurfaceCard>
+      )}
 
-        {sourceParam === "demo" && (
-          <Link href="/demo" className="mb-4 inline-block text-xs underline underline-offset-4">
-            Back to demo
-          </Link>
-        )}
+      {sourceParam === "demo" && (
+        <Link href="/demo" className="mb-6 inline-block font-sans text-xs text-[var(--st-text-secondary)] underline underline-offset-4">
+          Back to demo
+        </Link>
+      )}
 
+      <SurfaceCard>
         {mode === null && (
-          <div className="mb-4 flex gap-2">
-            <button
-              onClick={() => selectMode("DESKTOP_EMBEDDED")}
-              className="rounded bg-black px-4 py-2 text-white dark:bg-white dark:text-black"
-            >
-              Use this computer
-            </button>
+          <div className="grid gap-3 sm:grid-cols-2">
             <button
               onClick={() => selectMode("PHONE_ONLY")}
-              className="rounded border border-zinc-400 px-4 py-2"
+              className="min-h-[44px] rounded-2xl border border-[var(--st-text)] bg-[var(--st-surface)] p-4 text-left font-sans transition duration-200 hover:shadow-[0_2px_14px_rgba(28,26,23,0.07)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--st-text-muted)]"
             >
-              Use my phone
+              <div className="mb-1 text-sm font-semibold text-[var(--st-text)]">Use my phone</div>
+              <div className="text-xs text-[var(--st-text-muted)]">Recommended for the demo</div>
+            </button>
+            <button
+              onClick={() => selectMode("DESKTOP_EMBEDDED")}
+              className="min-h-[44px] rounded-2xl border border-[var(--st-border)] bg-[var(--st-surface)] p-4 text-left font-sans transition duration-200 hover:border-[var(--st-text-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--st-text-muted)]"
+            >
+              <div className="mb-1 text-sm font-semibold text-[var(--st-text)]">Use this computer</div>
+              <div className="text-xs text-[var(--st-text-muted)]">Embedded sandbox verification</div>
             </button>
           </div>
         )}
 
         {mode === "DESKTOP_EMBEDDED" && (
-          <button
+          <PrimaryAction
             onClick={handleStart}
             disabled={!canStart || publicState.status === "CREATING_SESSION"}
-            className="mb-4 rounded bg-black px-4 py-2 text-white disabled:opacity-50 dark:bg-white dark:text-black"
+            className="w-full sm:w-auto"
           >
             {publicState.status === "CREATING_SESSION" ? "Setting up..." : "Start secure payment check"}
-          </button>
+          </PrimaryAction>
         )}
 
         {mode === "PHONE_ONLY" && (
-          <button
+          <PrimaryAction
             onClick={handleCreatePhoneSession}
             disabled={!canStart || publicState.status === "CREATING_SESSION"}
-            className="mb-4 rounded bg-black px-4 py-2 text-white disabled:opacity-50 dark:bg-white dark:text-black"
+            className="w-full sm:w-auto"
           >
             {publicState.status === "CREATING_SESSION" ? "Setting up..." : "Create secure phone session"}
-          </button>
+          </PrimaryAction>
         )}
 
         {mode !== null && canCancel && (
-          <button onClick={handleCancel} className="mb-4 ml-2 rounded border border-zinc-400 px-4 py-2">
+          <SecondaryAction onClick={handleCancel} className="ml-0 mt-3 sm:ml-2 sm:mt-0">
             Cancel
-          </button>
+          </SecondaryAction>
         )}
 
         {mode === "DESKTOP_EMBEDDED" &&
@@ -414,40 +429,40 @@ function GateA2PageInner() {
           !qrPanelOpen && (
             <button
               onClick={handleOpenOnPhone}
-              className="mb-4 ml-2 rounded border border-zinc-400 px-4 py-2 text-xs"
+              className="ml-0 mt-3 rounded-full border border-[var(--st-border)] px-4 py-2 font-sans text-xs text-[var(--st-text-secondary)] sm:ml-2 sm:mt-0"
             >
               Open on phone (dev only)
             </button>
           )}
 
         {mode !== null && (
-          <p className="mb-4 rounded border border-zinc-300 p-3 dark:border-zinc-700">
+          <p className="mt-4 rounded-xl border border-[var(--st-border)] bg-[var(--st-bg)] p-3 font-sans text-sm text-[var(--st-text-secondary)]">
             {mode === "PHONE_ONLY" && PHONE_ONLY_STATUS_MESSAGES[publicState.status]
               ? PHONE_ONLY_STATUS_MESSAGES[publicState.status]
               : STATUS_MESSAGES[publicState.status]}
             {publicState.status === "SAFE_ERROR" && publicState.pravaErrorCode && (
-              <span className="mt-1 block text-xs text-zinc-500">Code: {publicState.pravaErrorCode}</span>
+              <span className="mt-1 block text-xs text-[var(--st-text-muted)]">Code: {publicState.pravaErrorCode}</span>
             )}
           </p>
         )}
 
         {qrPanelOpen && (
-          <div className="mb-4 rounded border border-zinc-300 p-4 text-center dark:border-zinc-700">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
+          <div className="mt-4 rounded-xl border border-[var(--st-border)] p-4 text-center">
+            <p className="mb-2 font-sans text-xs font-semibold uppercase tracking-wide text-[var(--st-text-muted)]">
               {mode === "PHONE_ONLY"
                 ? "Open once on your phone — do not open this session on this computer"
                 : "Temporary Prava session — expires shortly"}
             </p>
             <canvas ref={qrCanvasRef} className="mx-auto" aria-label="QR code to open this Prava session on your phone" />
-            <button onClick={closeQrPanel} className="mt-3 rounded border border-zinc-400 px-3 py-1 text-xs">
+            <button onClick={closeQrPanel} className="mt-3 rounded-full border border-[var(--st-border)] px-3 py-1 font-sans text-xs text-[var(--st-text-secondary)]">
               Close
             </button>
           </div>
         )}
 
-        {mode === "DESKTOP_EMBEDDED" && <div id="prava-card-form" ref={containerRef} className="min-h-[1px]" />}
-      </div>
-    </div>
+        {mode === "DESKTOP_EMBEDDED" && <div id="prava-card-form" ref={containerRef} className="mt-4 min-h-[1px]" />}
+      </SurfaceCard>
+    </ProductShell>
   );
 }
 

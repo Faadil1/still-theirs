@@ -22,7 +22,7 @@ describe("Gate A2 page source safety (static regression checks)", () => {
     // getSessionForSdk() is the only place session/token values are read from
     // the controller, and it must only ever be called for collectPAN(), not
     // interpolated into rendered text.
-    const jsxReturnStart = source.lastIndexOf("return (\n    <div");
+    const jsxReturnStart = source.lastIndexOf("return (\n    <ProductShell>");
     const jsxSection = source.slice(jsxReturnStart);
     expect(jsxSection).not.toMatch(/sessionToken/);
     expect(jsxSection).not.toMatch(/iframeUrl/);
@@ -85,7 +85,7 @@ describe("Gate A2 page source safety (static regression checks)", () => {
 
     it("never renders the raw iframe URL as visible text, never adds a copy-to-clipboard control, and only draws it into a canvas", async () => {
       const source = await fs.readFile(PAGE_PATH, "utf-8");
-      const jsxReturnStart = source.lastIndexOf("return (\n    <div");
+      const jsxReturnStart = source.lastIndexOf("return (\n    <ProductShell>");
       const jsxSection = source.slice(jsxReturnStart);
 
       expect(jsxSection).not.toMatch(/iframeUrl/);

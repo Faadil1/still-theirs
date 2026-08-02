@@ -48,7 +48,8 @@ describe("Demo page Linq trusted-perspective integration (static regression chec
 
   it("shows the sanitized success/error copy without ever claiming unconditional delivery or transferring authority", async () => {
     const source = await fs.readFile(PAGE_PATH, "utf-8");
-    expect(source).toMatch(/Perspective request sent through Linq/);
+    expect(source).toMatch(/Perspective request sent/);
+    expect(source).toMatch(/Sent through Linq/);
     expect(source).toMatch(/No authority transferred/);
     expect(source).not.toMatch(/>\s*Delivered\s*</);
   });
