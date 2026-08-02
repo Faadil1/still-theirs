@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { DEMO_SCENARIOS, type DemoScenarioId } from "@/lib/risk/scenarios";
 import { DemoFlowController, type AnalyzeResultShape, type TrustedContactChoice } from "@/lib/demo/demoFlow";
 
@@ -82,11 +83,6 @@ export default function DemoPage() {
   function handleReset() {
     controller.reset();
     setAnalysisStep(0);
-    sync();
-  }
-
-  function handleContinueToPrava() {
-    controller.continueToPravaPending();
     sync();
   }
 
@@ -207,12 +203,12 @@ export default function DemoPage() {
                 <p className="mb-4 text-sm text-[#5c5546] dark:text-[#c9bfa9]">
                   No payment credential has been created yet.
                 </p>
-                <button
-                  onClick={handleContinueToPrava}
-                  className="rounded-full bg-[#1c1a17] px-6 py-2.5 text-sm font-medium text-white dark:bg-[#f2ede6] dark:text-[#1c1a17] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#8a7f6d]"
+                <Link
+                  href="/gate-a2?mode=phone&source=demo"
+                  className="inline-block rounded-full bg-[#1c1a17] px-6 py-2.5 text-sm font-medium text-white dark:bg-[#f2ede6] dark:text-[#1c1a17] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#8a7f6d]"
                 >
                   Continue to secure payment
-                </button>
+                </Link>
               </div>
             ) : (
               <div className="rounded-lg border border-[#1c1a17] bg-white p-6 font-sans dark:border-[#f2ede6] dark:bg-[#1c1a17]">
@@ -240,27 +236,6 @@ export default function DemoPage() {
               <button
                 onClick={handleReset}
                 className="font-sans text-sm text-[#8a7f6d] underline-offset-4 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8a7f6d]"
-              >
-                Start over
-              </button>
-            </div>
-          </section>
-        )}
-
-        {view === "PRAVA_PENDING" && (
-          <section aria-label="Prava verification pending" className="space-y-5 rounded-lg border border-[#ded6c8] bg-white/80 p-6 font-sans dark:border-[#3a352c] dark:bg-[#1c1a17]/50">
-            <p className="text-xs uppercase tracking-[0.15em] text-[#8a7f6d] dark:text-[#a89a82]">Prava verification pending</p>
-            <p className="text-[#3a352c] dark:text-[#d8cfbd]">
-              This purchase is eligible to proceed. Creating a payment credential remains a separate, explicit step.
-            </p>
-            <p className="text-[#3a352c] dark:text-[#d8cfbd]">
-              Prava passkey verification is currently being validated. No payment credential has been created in this
-              demo state.
-            </p>
-            <div className="text-center">
-              <button
-                onClick={handleReset}
-                className="rounded-full border border-[#1c1a17] px-6 py-2.5 text-sm font-medium dark:border-[#f2ede6] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#8a7f6d]"
               >
                 Start over
               </button>
