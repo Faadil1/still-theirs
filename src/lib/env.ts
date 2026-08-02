@@ -20,6 +20,12 @@ const openaiEnvSchema = z.object({
   OPENAI_MODEL: z.string().min(1, "OPENAI_MODEL is required"),
 });
 
+const linqEnvSchema = z.object({
+  LINQ_API_KEY: z.string().min(1, "LINQ_API_KEY is required"),
+  LINQ_FROM_NUMBER: z.string().min(1, "LINQ_FROM_NUMBER is required"),
+  LINQ_TRUSTED_CONTACT_NUMBER: z.string().min(1, "LINQ_TRUSTED_CONTACT_NUMBER is required"),
+});
+
 export const OPENAI_TIMEOUT_MS_DEFAULT = 30000;
 export const OPENAI_TIMEOUT_MS_MIN = 5000;
 export const OPENAI_TIMEOUT_MS_MAX = 60000;
@@ -41,6 +47,7 @@ export type ServerEnv = z.infer<typeof serverEnvSchema>;
 export type ClientEnv = z.infer<typeof clientEnvSchema>;
 export type HealthEnv = z.infer<typeof healthEnvSchema>;
 export type OpenAIEnv = z.infer<typeof openaiEnvSchema> & { OPENAI_TIMEOUT_MS: number };
+export type LinqEnv = z.infer<typeof linqEnvSchema>;
 
 let cachedServerEnv: ServerEnv | null = null;
 
@@ -99,6 +106,26 @@ export function getOpenAIEnv(): OpenAIEnv {
 
   cachedOpenAIEnv = { ...parsed.data, OPENAI_TIMEOUT_MS: parseOpenAITimeoutMs(process.env.OPENAI_TIMEOUT_MS) };
   return cachedOpenAIEnv;
+}
+
+/**
+ * Not cached (unlike getServerEnv/getOpenAIEnv) — Linq calls are rare,
+ * user-initiated button clicks, so re-parsing each time keeps tests simple
+ * and avoids any risk of a stale cached value outliving a config change.
+ */
+export function getLinqEnv(): LinqEnv {
+  const parsed = linqEnvSchema.safeParse({
+    LINQ_API_KEY: process.env.LINQ_API_KEY,
+    LINQ_FROM_NUMBER: process.env.LINQ_FROM_NUMBER,
+    LINQ_TRUSTED_CONTACT_NUMBER: process.env.LINQ_TRUSTED_CONTACT_NUMBER,
+  });
+
+  if (!parsed.success) {
+    const missing = parsed.error.issues.map((i) => i.path.join(".")).join(", ");
+    throw new Error(`Missing or invalid Linq environment variables: ${missing}.`);
+  }
+
+  return parsed.data;
 }
 
 export function getClientEnv(): ClientEnv {

@@ -94,7 +94,13 @@ export interface TrustedPerspectiveRequest {
 }
 
 export interface TrustedPerspectiveResult {
-  recommendation: "CONSISTENT" | "RECOMMEND_PAUSE";
+  /**
+   * "PENDING" covers a provider that has requested delivery of a
+   * perspective message but has no webhook/callback wired up yet to learn
+   * the trusted contact's actual answer — e.g. the current Linq adapter in
+   * src/lib/linq/server.ts. It is never treated as a decision override.
+   */
+  recommendation: "CONSISTENT" | "RECOMMEND_PAUSE" | "PENDING";
 }
 
 /** Future Linq adapter shape. Not implemented or called by this SDK. */

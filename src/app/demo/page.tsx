@@ -29,10 +29,14 @@ function formatAmount(cents: number, currency: string): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(cents / 100);
 }
 
+type LinqRequestStatus = "IDLE" | "SENDING" | "SENT" | "ERROR";
+
 export default function DemoPage() {
   const [controller] = useState(() => new DemoFlowController());
   const [state, setState] = useState(() => controller.getState());
   const [analysisStep, setAnalysisStep] = useState(0);
+  const [linqStatus, setLinqStatus] = useState<LinqRequestStatus>("IDLE");
+  const [linqError, setLinqError] = useState<string | null>(null);
 
   function sync() {
     setState(controller.getState());
@@ -99,6 +103,39 @@ export default function DemoPage() {
   function handleTrustedChoice(choice: TrustedContactChoice) {
     controller.recordTrustedContactChoice(choice);
     sync();
+  }
+
+  // Sends a real, human-visible perspective request via Linq — separate
+  // from the local "Ask someone I trust" simulation above. Never reachable
+  // unless the decision is REQUEST_TRUSTED_CONTACT (guarded here, and again
+  // on the server side, by the API route itself). Never falls through to
+  // Prava on either success or failure.
+  async function handleSendPerspectiveRequest() {
+    if (linqStatus === "SENDING") return; // guards rapid double-clicks
+    if (!result || result.decision !== "REQUEST_TRUSTED_CONTACT") return;
+
+    setLinqStatus("SENDING");
+    setLinqError(null);
+
+    try {
+      const res = await fetch("/api/linq/trusted-perspective", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision: result.decision, reasonCodes: result.reasonCodes }),
+      });
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok || !data?.success) {
+        setLinqStatus("ERROR");
+        setLinqError("Something didn't go through. You can try again.");
+        return;
+      }
+
+      setLinqStatus("SENT");
+    } catch {
+      setLinqStatus("ERROR");
+      setLinqError("Something didn't go through. You can try again.");
+    }
   }
 
   const { view, selectedScenario, result, error, trustedContactChoice } = state;
@@ -229,6 +266,27 @@ export default function DemoPage() {
                 >
                   Ask someone I trust
                 </button>
+
+                <div className="mt-4 border-t border-[#3a352c] pt-4 dark:border-[#f2ede6]/30">
+                  {linqStatus !== "SENT" && (
+                    <button
+                      onClick={handleSendPerspectiveRequest}
+                      disabled={linqStatus === "SENDING"}
+                      className="rounded-full border border-[#1c1a17] px-6 py-2.5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 dark:border-[#f2ede6] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#8a7f6d]"
+                    >
+                      {linqStatus === "SENDING" ? "Sending..." : linqStatus === "ERROR" ? "Try again" : "Send perspective request"}
+                    </button>
+                  )}
+                  {linqStatus === "ERROR" && linqError && (
+                    <p className="mt-2 text-sm text-[#8a7f6d] dark:text-[#a89a82]">{linqError}</p>
+                  )}
+                  {linqStatus === "SENT" && (
+                    <div className="text-sm text-[#3a352c] dark:text-[#d8cfbd]">
+                      <p>Perspective request sent through Linq</p>
+                      <p>No authority transferred</p>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
