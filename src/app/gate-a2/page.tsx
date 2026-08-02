@@ -311,9 +311,17 @@ function GateA2PageInner() {
   const canCancel = publicState.status === "CREATING_SESSION" || publicState.status === "READY_FOR_CARD" || publicState.status === "AWAITING_USER_AUTHENTICATION";
 
   // Quiet step indicator only — never marks a step complete ahead of the
-  // actual controller/session state.
-  const sessionExists = publicState.status !== "IDLE";
-  const verificationComplete = publicState.status === "COMPLETED";
+  // actual controller/session state. IDLE/CANCELLED/SAFE_ERROR never count
+  // as "session created", even though SAFE_ERROR can occur before a
+  // session ever existed — status alone (not a broad "not IDLE" check) is
+  // the only truthful source here.
+  const step2Active = publicState.status === "CREATING_SESSION";
+  const step2Complete =
+    publicState.status === "READY_FOR_CARD" ||
+    publicState.status === "AWAITING_USER_AUTHENTICATION" ||
+    publicState.status === "COMPLETED";
+  const step3Active = publicState.status === "READY_FOR_CARD" || publicState.status === "AWAITING_USER_AUTHENTICATION";
+  const step3Complete = publicState.status === "COMPLETED";
 
   return (
     <ProductShell>
@@ -329,9 +337,13 @@ function GateA2PageInner() {
       </header>
 
       <ol className="mb-6 flex flex-col gap-1.5 font-sans text-xs text-[var(--st-text-muted)] sm:flex-row sm:gap-6">
-        <li className={sessionExists || verificationComplete ? "text-[var(--st-safe)]" : "text-[var(--st-text)]"}>1. Purchase approved</li>
-        <li className={verificationComplete ? "text-[var(--st-safe)]" : sessionExists ? "text-[var(--st-text)]" : ""}>2. Create Prava session</li>
-        <li className={verificationComplete ? "text-[var(--st-safe)]" : ""}>3. Complete sandbox verification</li>
+        <li className="text-[var(--st-safe)]">{"✓"} Purchase approved</li>
+        <li className={step2Complete ? "text-[var(--st-safe)]" : step2Active ? "text-[var(--st-text)]" : ""}>
+          {step2Complete ? "✓" : "2."} Create Prava session
+        </li>
+        <li className={step3Complete ? "text-[var(--st-safe)]" : step3Active ? "text-[var(--st-text)]" : ""}>
+          {step3Complete ? "✓" : "3."} Complete sandbox verification
+        </li>
       </ol>
 
       {sourceParam === "demo" && (
