@@ -84,10 +84,12 @@ describe("APPROVE (/demo) -> PHONE_ONLY (/gate-a2) integration", () => {
       const source = await fs.readFile(GATE_A2_PAGE_PATH, "utf-8");
       const panelStart = source.indexOf('sourceParam === "demo" && (');
       expect(panelStart).toBeGreaterThan(-1);
-      const panel = source.slice(panelStart, source.indexOf("Verification continues on your phone.", panelStart));
+      const panel = source.slice(panelStart, source.indexOf("Sandbox only", panelStart));
       expect(panel).toContain("Routine groceries");
-      expect(panel).toContain("Approved by the Still Theirs safety gate.");
-      expect(panel).toContain("Payment credential not created yet.");
+      expect(panel).toContain("Approved payment instruction");
+      expect(panel).toContain("Still Theirs approved the purchase intent.");
+      expect(panel).toContain("No Prava session exists until you create it below.");
+      expect(panel).toContain("Visa Intelligent Commerce-enabled through Prava.");
     });
 
     it('has a "Back to demo" link pointing at /demo, shown only when source=demo', async () => {

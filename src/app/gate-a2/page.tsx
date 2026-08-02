@@ -9,6 +9,15 @@ import { GateA2Controller, type GateA2PublicState } from "@/lib/gateA2/sessionMa
 import { SdkInitGuard } from "@/lib/gateA2/sdkGuard";
 import { getClientEnv } from "@/lib/env";
 import { shouldAutoHideQr } from "@/lib/gateA2/qrPanel";
+import { ROUTINE_GROCERIES_INTENT } from "@/lib/risk/scenarios";
+
+// This gate is fixed to the routine-groceries scenario — the same values
+// already sent in the Prava session request (src/lib/prava/server.ts) are
+// reused here for display, rather than duplicating the merchant/amount as
+// separate literals.
+function formatAmount(cents: number, currency: string): string {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(cents / 100);
+}
 
 // Only the literal values below are ever honored from the URL. Anything
 // else (including no param at all) is treated as absent — this is the only
@@ -315,10 +324,37 @@ function GateA2PageInner() {
 
         {sourceParam === "demo" && (
           <div className="mb-4 rounded border border-zinc-300 p-4 text-sm dark:border-zinc-700">
-            <p className="mb-1 font-semibold">Routine groceries</p>
-            <p className="mb-1 text-zinc-700 dark:text-zinc-300">Approved by the Still Theirs safety gate.</p>
-            <p className="mb-1 text-zinc-700 dark:text-zinc-300">Payment credential not created yet.</p>
-            <p className="text-zinc-700 dark:text-zinc-300">Verification continues on your phone.</p>
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
+              Approved payment instruction
+            </p>
+            <p className="mb-2 font-semibold">Routine groceries</p>
+            <dl className="mb-3 space-y-1 text-zinc-700 dark:text-zinc-300">
+              <div className="flex justify-between">
+                <dt>Merchant</dt>
+                <dd className="font-medium">{ROUTINE_GROCERIES_INTENT.merchantLabel}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt>Maximum amount</dt>
+                <dd className="font-medium">
+                  {formatAmount(ROUTINE_GROCERIES_INTENT.amountCents, ROUTINE_GROCERIES_INTENT.currency)}
+                </dd>
+              </div>
+              <div className="flex justify-between">
+                <dt>Purpose</dt>
+                <dd className="font-medium">Usual weekly groceries</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt>Credential scope</dt>
+                <dd className="font-medium">One purchase only</dd>
+              </div>
+            </dl>
+            <p className="mb-1 text-zinc-700 dark:text-zinc-300">Still Theirs approved the purchase intent.</p>
+            <p className="mb-2 text-zinc-700 dark:text-zinc-300">No Prava session exists until you create it below.</p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-500">
+              Visa Intelligent Commerce-enabled through Prava.
+              <br />
+              Sandbox only — no real charge.
+            </p>
           </div>
         )}
 

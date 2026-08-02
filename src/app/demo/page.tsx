@@ -235,6 +235,43 @@ export default function DemoPage() {
               </ul>
             </div>
 
+            {result.decision === "APPROVE" && scenario && (
+              <div className="rounded-lg border border-[#ded6c8] bg-white/60 p-6 font-sans dark:border-[#3a352c] dark:bg-[#1c1a17]/30">
+                <p className="mb-1 text-xs uppercase tracking-[0.15em] text-[#8a7f6d] dark:text-[#a89a82]">
+                  Payment instruction
+                </p>
+                <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[#5c5546] dark:text-[#c9bfa9]">
+                  What the payment credential will be allowed to do
+                </h3>
+                <dl className="mb-4 space-y-2 text-sm text-[#3a352c] dark:text-[#d8cfbd]">
+                  <div className="flex justify-between">
+                    <dt>Merchant</dt>
+                    <dd className="font-medium">{scenario.merchantLabel}</dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt>Maximum amount</dt>
+                    <dd className="font-medium">{formatAmount(scenario.amountCents, scenario.currency)}</dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt>Purpose</dt>
+                    <dd className="font-medium">Usual weekly groceries</dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt>Credential scope</dt>
+                    <dd className="font-medium">One purchase only</dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt>Human confirmation</dt>
+                    <dd className="font-medium">Required before creation</dd>
+                  </div>
+                </dl>
+                <p className="mb-2 text-sm text-[#5c5546] dark:text-[#c9bfa9]">
+                  This instruction will be sent to Prava only after you explicitly continue.
+                </p>
+                <p className="text-xs text-[#8a7f6d] dark:text-[#a89a82]">Visa Intelligent Commerce-enabled through Prava.</p>
+              </div>
+            )}
+
             {result.decision === "APPROVE" ? (
               <div className="rounded-lg border border-[#ded6c8] bg-white/60 p-6 font-sans dark:border-[#3a352c] dark:bg-[#1c1a17]/30">
                 <p className="mb-4 text-sm text-[#5c5546] dark:text-[#c9bfa9]">
