@@ -3,7 +3,7 @@
 ## Product
 
 - [ ] Production build passes locally (`npm run build`)
-- [ ] Live URLs deployed and loading (`/demo`, `/gate-a2`) — TODO: add URLs
+- [ ] Live URLs deployed and loading — https://still-theirs-live.netlify.app/ and https://still-theirs-live.netlify.app/demo
 - [ ] Both paths walk end-to-end on the live URL (routine → Gate A2 idle; risky → Missing Card)
 - [ ] Mobile layout checked at 390px (Missing Card leads the risky screen)
 - [ ] No exposed secrets on the live deployment (no `.env` values in client bundles; only `NEXT_PUBLIC_PRAVA_PUBLISHABLE_KEY` is browser-visible by design)
@@ -15,7 +15,7 @@
 - [ ] `docs/ARCHITECTURE.md` present, Mermaid renders on GitHub
 - [ ] Clean working tree at the submission commit (`git status --short`)
 - [ ] Meaningful commit history (47 commits across 2026-08-01/02, evidence-entry discipline)
-- [ ] Repository visibility set correctly (public or judge-accessible) — TODO
+- [ ] Repository visibility set correctly (public or judge-accessible) — https://github.com/Faadil1/still-theirs
 - [ ] No private evidence in the repo (audit log contains suffixes/booleans only; ledger rows sanitized)
 - [ ] No environment files committed (`.env.local`, `.env.recovered`, `.env.vercel.local`, backups — all git-ignored; verify with `git ls-files | findstr env`)
 

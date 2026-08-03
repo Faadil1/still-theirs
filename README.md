@@ -6,8 +6,9 @@ Pre-credential intent safety for AI commerce.
 
 **Links**
 
-- Live product — TODO (deployment URL)
-- Guided demo — TODO (`/demo` on the deployed URL)
+- Live product — https://still-theirs-live.netlify.app/
+- Guided demo — https://still-theirs-live.netlify.app/demo
+- GitHub — https://github.com/Faadil1/still-theirs
 - Demo video — TODO until URL exists
 - Devfolio submission — TODO until URL exists
 

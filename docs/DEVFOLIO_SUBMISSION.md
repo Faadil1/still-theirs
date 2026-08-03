@@ -69,12 +69,12 @@ Everything except the `create-next-app` boilerplate. The first commit (2026-08-0
 
 # Links
 
-- Live product: TODO
-- Guided demo: TODO (`/demo` on the live URL)
-- GitHub: TODO (repository URL after visibility check)
+- Live product: https://still-theirs-live.netlify.app/
+- Guided demo: https://still-theirs-live.netlify.app/demo
+- GitHub: https://github.com/Faadil1/still-theirs
 - Video: TODO
-- Architecture: `docs/ARCHITECTURE.md` (TODO: absolute URL once the repo link exists)
-- Supporting evidence: `docs/EVIDENCE_LEDGER.md` (TODO: absolute URL once the repo link exists)
+- Architecture: https://github.com/Faadil1/still-theirs/blob/main/docs/ARCHITECTURE.md
+- Supporting evidence: https://github.com/Faadil1/still-theirs/blob/main/docs/EVIDENCE_LEDGER.md
 
 # Recommended screenshot order
 
