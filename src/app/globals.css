@@ -4,14 +4,27 @@
   --background: #f8f5ef;
   --foreground: #1c1a17;
 
-  --st-bg: #f8f5ef;
-  --st-surface: #fffdfc;
-  --st-text: #1c1a17;
-  --st-text-secondary: #6b6255;
-  --st-text-muted: #918674;
-  --st-border: #ded6c8;
-  --st-safe: #466052;
-  --st-paused: #8a5a44;
+  /*
+   * Still Theirs archival system — v3.1 locked design tokens.
+   * paper / paper-raised / ink / ink-soft / ink-faint / olive / rust /
+   * hairline, mapped onto the existing --st-* names so /demo and
+   * /gate-a2 stay coherent from a single source of truth. The locked
+   * direction defines exactly one (paper) palette, so these values do
+   * not switch in dark mode.
+   */
+  --st-bg: #f6f1e6; /* paper */
+  --st-surface: #fbf8f1; /* paper-raised */
+  --st-text: #1b1812; /* ink */
+  --st-text-secondary: #54493a; /* ink-soft */
+  --st-text-muted: #a99c86; /* ink-faint */
+  --st-border: #d9cfb8; /* hairline */
+  --st-safe: #666b3e; /* olive */
+  --st-safe-deep: #494d2c;
+  --st-safe-tint: #e3e4ce;
+  --st-paused: #ac4a26; /* rust */
+  --st-paused-deep: #832f14;
+  --st-paused-tint: #efdbc8;
+  --st-shadow: 2px 2px 0 rgba(27, 24, 18, 0.06); /* paper stack */
 }
 
 @theme inline {
@@ -25,15 +38,6 @@
   :root {
     --background: #141210;
     --foreground: #f2ede6;
-
-    --st-bg: #141210;
-    --st-surface: #1c1a17;
-    --st-text: #f2ede6;
-    --st-text-secondary: #c9bfa9;
-    --st-text-muted: #a89a82;
-    --st-border: #3a352c;
-    --st-safe: #7fa893;
-    --st-paused: #d9a78c;
   }
 }
 
@@ -53,4 +57,181 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+/*
+ * Typeface scope for the Still Theirs product surfaces (/demo, /gate-a2).
+ * Newsreader (display serif) / Archivo (body) / IBM Plex Mono (data) are
+ * applied by overriding the Tailwind font utilities inside .st-product
+ * only, so the root technical gate keeps its Geist fonts untouched.
+ */
+.st-product {
+  font-family: var(--font-archivo), "Helvetica Neue", Arial, sans-serif;
+}
+.st-product .font-sans {
+  font-family: var(--font-archivo), "Helvetica Neue", Arial, sans-serif;
+}
+.st-product .font-serif {
+  font-family: var(--font-newsreader), Georgia, serif;
+}
+.st-product .font-mono {
+  font-family: var(--font-plex-mono), "Courier New", monospace;
+}
+
+/* ============ The Held Line (decision boundary) ============ */
+/* A single hairline: human intent, evidence, explanation, and action on
+ * one side; payment authority / credential territory on the other. It
+ * draws in once on every screen entry — the boundary re-asserted, not a
+ * scroll flourish. Horizontal on small screens, vertical from lg up. */
+.st-held-line,
+.st-held-line-x {
+  position: relative;
+  background: var(--st-text);
+  opacity: 0.28;
+  width: 100%;
+  height: 1px;
+  margin: 6px 0 2px;
+  transform-origin: left;
+  animation: st-draw-x 0.55s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+.st-held-label {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: var(--font-plex-mono), "Courier New", monospace;
+  font-size: 9px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--st-text-muted);
+  background: var(--st-bg);
+  padding: 2px 12px;
+  white-space: nowrap;
+}
+@media (min-width: 1024px) {
+  .st-held-line {
+    width: 1px;
+    height: auto;
+    min-height: 220px;
+    align-self: stretch;
+    margin: 0;
+    transform-origin: top;
+    animation: st-draw-y 0.55s cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+  .st-held-line .st-held-label {
+    writing-mode: vertical-rl;
+    transform: translate(-50%, -50%) rotate(180deg);
+    padding: 12px 4px;
+  }
+}
+@keyframes st-draw-x {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes st-draw-y {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+/* ============ The Seal (sparing archival mark) ============ */
+/* A plain rotated double ring — the one deliberate circle in an
+ * otherwise zero-radius system. Never filled: paper background, border
+ * and text in the verdict's color. */
+.st-seal {
+  position: absolute;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  border: 1.5px solid currentColor;
+  background: var(--st-bg);
+  font-family: var(--font-plex-mono), "Courier New", monospace;
+  font-size: 8.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  transform: rotate(-8deg);
+}
+.st-seal::before {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border: 1px solid currentColor;
+  opacity: 0.4;
+  border-radius: 50%;
+}
+@media (max-width: 1023px) {
+  .st-seal {
+    width: 48px;
+    height: 48px;
+    font-size: 7px;
+  }
+}
+.st-seal-settle {
+  animation: st-seal-settle 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes st-seal-settle {
+  0%,
+  55% {
+    opacity: 0;
+    transform: rotate(-22deg) scale(0.7);
+  }
+  100% {
+    opacity: 1;
+    transform: rotate(-8deg) scale(1);
+  }
+}
+
+/* ============ The Missing Card (risky void artifact) ============ */
+/* The literal 1.586:1 silhouette of the credential that was never
+ * issued. On screen entry a solid rust ring briefly rises as if the
+ * credential were about to resolve into being — and recedes, leaving
+ * the dashed outline exactly as it was. One shot; holds its end state. */
+.st-resolve-pulse {
+  position: absolute;
+  inset: -7px;
+  border: 2px solid var(--st-paused);
+  pointer-events: none;
+  opacity: 0;
+  animation: st-resolve-pulse 1s ease both;
+}
+@keyframes st-resolve-pulse {
+  0% {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  38% {
+    opacity: 0.45;
+    transform: scale(1.012);
+  }
+  65%,
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
+/* ============ Entrances (one shot, hold end state) ============ */
+.st-fade-settle {
+  animation: st-fade-settle 0.45s ease both;
+}
+@keyframes st-fade-settle {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
