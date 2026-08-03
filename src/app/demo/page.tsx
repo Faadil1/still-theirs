@@ -109,7 +109,7 @@ export default function DemoPage() {
       // real analysis request is in flight. The fourth ("Decision ready")
       // only reveals once the deterministic decision has actually returned.
       for (let revealed = 2; revealed < ANALYSIS_STEPS.length; revealed++) {
-        await new Promise((r) => setTimeout(r, 350));
+        await new Promise((r) => setTimeout(r, 250));
         setAnalysisStep(revealed);
       }
 
@@ -127,10 +127,6 @@ export default function DemoPage() {
       }
 
       setAnalysisStep(ANALYSIS_STEPS.length);
-      // The Held seal settles on the final step. Hold that beat briefly,
-      // then resolve to the decision automatically — a visual pause only,
-      // never an extra user decision or click.
-      await new Promise((r) => setTimeout(r, 1200));
       controller.completeAnalysis(data);
       sync();
     } catch {
